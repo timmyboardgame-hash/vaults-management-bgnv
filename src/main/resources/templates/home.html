@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Home')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('home')}"></div>
+
+    <main class="main-content">
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Overview</h1>
+                <p class="page-subtitle">Vault Management System</p>
+            </div>
+        </div>
+
+        <div class="stat-grid">
+
+            <a th:href="@{/agents}" class="stat-card">
+                <div class="stat-icon stat-icon--violet">
+                    <i class="bi bi-shop"></i>
+                </div>
+                <div class="stat-body">
+                    <div class="stat-value" th:text="${agentCount}">0</div>
+                    <div class="stat-label">Agents</div>
+                </div>
+                <i class="bi bi-chevron-right stat-arrow"></i>
+            </a>
+
+            <a th:href="@{/vaults}" class="stat-card">
+                <div class="stat-icon stat-icon--blue">
+                    <i class="bi bi-safe2-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div class="stat-value" th:text="${vaultCount}">0</div>
+                    <div class="stat-label">Vaults</div>
+                </div>
+                <i class="bi bi-chevron-right stat-arrow"></i>
+            </a>
+
+            <a th:href="@{/items}" class="stat-card">
+                <div class="stat-icon stat-icon--emerald">
+                    <i class="bi bi-dice-5-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div class="stat-value" th:text="${itemCount}">0</div>
+                    <div class="stat-label">Items</div>
+                </div>
+                <i class="bi bi-chevron-right stat-arrow"></i>
+            </a>
+
+            <a th:href="@{/bookings}" class="stat-card">
+                <div class="stat-icon stat-icon--amber">
+                    <i class="bi bi-calendar-check-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div class="stat-value" th:text="${bookingCount}">0</div>
+                    <div class="stat-label">Bookings</div>
+                </div>
+                <i class="bi bi-chevron-right stat-arrow"></i>
+            </a>
+
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

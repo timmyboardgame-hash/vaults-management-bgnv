@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: vault-management
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:h2:file:./data/vaultdb;AUTO_SERVER=TRUE}
+    username: ${DATABASE_USERNAME:sa}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+
+  h2:
+    console:
+      enabled: true   # http://localhost:8080/h2-console (dev only)
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}  # H2: update / PostgreSQL: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  thymeleaf:
+    cache: false
+
+  web:
+    resources:
+      cache:
+        period: 0
+
+server:
+  port: ${PORT:8080}
+
+# AWS Configuration (ใช้ IAM Role — ไม่ต้องใส่ key โดยตรง)
+aws:
+  region: ${AWS_REGION:ap-southeast-1}
+  s3:
+    bucket: ${AWS_S3_BUCKET:vault-storage}
+  iot:
+    endpoint: ${AWS_IOT_ENDPOINT:}
+
+# Admin credentials (สำหรับ Management UI login)
+admin:
+  username: ${ADMIN_USERNAME:admin}
+  password: ${ADMIN_PASSWORD:changeme}
+
+# IoT Lambda callback secret — ต้องตรงกับ IOT_CALLBACK_SECRET ใน Lambda env
+iot:
+  callback:
+    secret: ${IOT_CALLBACK_SECRET:dev-iot-secret}
+
+# SpringDoc / Swagger
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

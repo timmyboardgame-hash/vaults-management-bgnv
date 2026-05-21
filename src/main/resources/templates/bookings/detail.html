@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Booking Detail')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('bookings')}"></div>
+
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <a href="/bookings" class="btn btn-sm btn-outline-secondary mb-2">
+                    <i class="bi bi-arrow-left me-1"></i>Back
+                </a>
+                <h1 class="page-title" th:text="${booking.bookingId}">Booking</h1>
+                <p class="page-subtitle">
+                    <span class="badge rounded-pill"
+                          th:text="${booking.bookingStatus}"
+                          th:classappend="'badge-' + ${booking.bookingStatus}">—</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <!-- Booking Info -->
+            <div class="col-12 col-md-6">
+                <div class="detail-card">
+                    <div class="detail-card-title">Booking Info</div>
+                    <div class="detail-row">
+                        <span class="detail-label">Booking ID</span>
+                        <span class="detail-value" th:text="${booking.bookingId}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value">
+                            <span class="badge rounded-pill"
+                                  th:text="${booking.bookingStatus}"
+                                  th:classappend="'badge-' + ${booking.bookingStatus}">—</span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Date</span>
+                        <span class="detail-value" th:text="${booking.bookingDate != null ? booking.bookingDate : '—'}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Start Time</span>
+                        <span class="detail-value"
+                              th:text="${booking.bookingTimeStart != null ? #temporals.format(booking.bookingTimeStart, 'HH:mm') : '—'}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">End Time</span>
+                        <span class="detail-value"
+                              th:text="${booking.bookingTimeEnd != null ? #temporals.format(booking.bookingTimeEnd, 'HH:mm') : '—'}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Slot</span>
+                        <span class="detail-value" th:text="${booking.slotId != null ? booking.slotId : '—'}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">PIN</span>
+                        <span class="detail-value">
+                            <code th:if="${booking.pin != null}" th:text="${booking.pin}">—</code>
+                            <span th:unless="${booking.pin != null}">—</span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Created</span>
+                        <span class="detail-value"
+                              th:text="${booking.createdAt != null ? #temporals.format(booking.createdAt, 'dd/MM/yyyy HH:mm') : '—'}">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <!-- Agent -->
+                <div class="detail-card mb-3">
+                    <div class="detail-card-title">Agent</div>
+                    <div class="detail-row">
+                        <span class="detail-label">Agent ID</span>
+                        <span class="detail-value">
+                            <a th:href="@{'/agents/' + ${booking.agentId}}" th:text="${booking.agentId}">—</a>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Name</span>
+                        <span class="detail-value" th:text="${booking.agentName != null ? booking.agentName : '—'}">—</span>
+                    </div>
+                </div>
+
+                <!-- Item -->
+                <div class="detail-card">
+                    <div class="detail-card-title">Item</div>
+                    <div class="detail-row">
+                        <span class="detail-label">Item ID</span>
+                        <span class="detail-value">
+                            <a th:href="@{'/items/' + ${booking.itemId}}" th:text="${booking.itemId}">—</a>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Name EN</span>
+                        <span class="detail-value" th:text="${booking.itemNameEn != null ? booking.itemNameEn : '—'}">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Name TH</span>
+                        <span class="detail-value" th:text="${booking.itemNameTh != null ? booking.itemNameTh : '—'}">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

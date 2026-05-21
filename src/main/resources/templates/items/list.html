@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Items')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('items')}"></div>
+
+    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '' }">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Items</h1>
+                <p class="page-subtitle">Manage all board game items</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="showCreate = true">
+                <i class="bi bi-plus-lg me-1"></i>Add Item
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-search">
+                <i class="bi bi-search toolbar-search-icon"></i>
+                <input type="text"
+                       class="form-control"
+                       placeholder="Search items..."
+                       name="search"
+                       hx-get="/items"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#items-tbody"
+                       hx-swap="outerHTML"
+                       hx-include="[name='binding']">
+            </div>
+            <select class="form-select"
+                    name="binding"
+                    hx-get="/items"
+                    hx-trigger="change"
+                    hx-target="#items-tbody"
+                    hx-swap="outerHTML"
+                    hx-include="[name='search']"
+                    th:value="${currentBinding}">
+                <option value=""       th:selected="${currentBinding == ''}">All Bindings</option>
+                <option value="BOUND"  th:selected="${currentBinding == 'BOUND'}">In vault</option>
+                <option value="UNBOUND" th:selected="${currentBinding == 'UNBOUND'}">Not in vault</option>
+            </select>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Item ID</th>
+                        <th>Name EN</th>
+                        <th>Name TH</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="items-tbody" th:fragment="items-tbody">
+                    <tr th:if="${items.isEmpty()}" class="empty-row">
+                        <td colspan="7" class="text-center">No items found</td>
+                    </tr>
+                    <tr th:each="item : ${items}"
+                        class="row-link"
+                        th:attr="data-href='/items/' + ${item.itemId}"
+                        onclick="window.location.href=this.dataset.href">
+                        <td @click.stop>
+                            <img th:src="${item.itemImageUrl}"
+                                 th:if="${item.itemImageUrl != null && !item.itemImageUrl.isEmpty()}"
+                                 class="thumb" alt="">
+                            <span th:unless="${item.itemImageUrl != null && !item.itemImageUrl.isEmpty()}"
+                                  class="thumb d-inline-flex align-items-center justify-content-center"
+                                  style="font-size:0.65rem;color:var(--vm-muted);background:var(--vm-input);">N/A</span>
+                        </td>
+                        <td th:text="${item.itemId}">—</td>
+                        <td th:text="${item.itemNameEn != null ? item.itemNameEn : '—'}">—</td>
+                        <td th:text="${item.itemNameTh != null ? item.itemNameTh : '—'}">—</td>
+                        <td>
+                            <span class="badge rounded-pill"
+                                  th:text="${item.itemStatus}"
+                                  th:classappend="'badge-' + ${item.itemStatus}">—</span>
+                        </td>
+                        <td th:text="${item.createdAt != null ? #temporals.format(item.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
+                        <td @click.stop>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @click="deleteId = [[${item.itemId}]]; showDelete = true">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="row-count" th:text="${items.size()} + ' item(s)'"></div>
+
+        <!-- Create Modal -->
+        <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Item</h5>
+                    <button type="button" class="btn-close" @click="showCreate = false"></button>
+                </div>
+                <form hx-post="/items"
+                      hx-on::after-request="if(event.detail.successful){ showCreate = false; window.location.reload(); }">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Item ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="itemId" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Name EN <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="itemNameEn" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Name TH <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="itemNameTh" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" name="itemStatus">
+                                <option value="ENABLE">ENABLE</option>
+                                <option value="DISABLE">DISABLE</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Image URL</label>
+                            <input type="text" class="form-control" name="itemImageUrl">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Game Code</label>
+                            <input type="text" class="form-control" name="gameCode">
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label">Min Players</label>
+                                <input type="number" class="form-control" name="playerCountMin" min="1">
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Max Players</label>
+                                <input type="number" class="form-control" name="playerCountMax" min="1">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label">Min Time (min)</label>
+                                <input type="number" class="form-control" name="playTimeMin" min="0">
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Max Time (min)</label>
+                                <input type="number" class="form-control" name="playTimeMax" min="0">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Difficulty Rating</label>
+                            <input type="number" class="form-control" name="difficultyRating" step="0.1" min="0" max="5">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">BGG Link</label>
+                            <input type="text" class="form-control" name="linkBoardgamegeek">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Video Link</label>
+                            <input type="text" class="form-control" name="linkVideo">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Remark</label>
+                            <input type="text" class="form-control" name="remark1">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" @click="showCreate = false">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete Confirm Modal -->
+        <div class="modal-overlay" x-show="showDelete" x-cloak @click.self="showDelete = false">
+            <div class="modal-content" style="max-width:380px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @click="showDelete = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Delete item <strong x-text="deleteId"></strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @click="showDelete = false">Cancel</button>
+                    <button class="btn btn-danger btn-sm"
+                            @click="htmx.ajax('DELETE', '/items/' + deleteId, {}); showDelete = false">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

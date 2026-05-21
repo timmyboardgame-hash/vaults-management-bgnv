@@ -1,0 +1,39 @@
+target/
+*.class
+*.jar
+*.war
+
+# Gradle
+.gradle/
+build/
+gradle/wrapper/gradle-wrapper.jar
+
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.DS_Store
+
+# Maven wrapper
+.mvn/
+mvnw
+mvnw.cmd
+
+# Logs
+*.log
+logs/
+
+# Claude
+CLAUDE.md
+memory.md
+.claude/
+
+# Docker artifacts
+*.bz2
+*.tar
+
+# H2 DB data
+data/

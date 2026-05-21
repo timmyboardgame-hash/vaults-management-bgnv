@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Bindings')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('bindings')}"></div>
+
+    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '' }">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Bindings</h1>
+                <p class="page-subtitle">Agent ↔ Vault assignments</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="showCreate = true">
+                <i class="bi bi-plus-lg me-1"></i>Add Binding
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Vault</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="b : ${bindings}">
+                        <td>
+                            <div th:text="${b.agentName}">-</div>
+                            <small class="text-muted" th:text="${b.agentId}">-</small>
+                        </td>
+                        <td th:text="${b.vaultName}">-</td>
+                        <td>
+                            <span class="badge badge-success" th:if="${b.status == 'ACTIVE'}">ACTIVE</span>
+                            <span class="badge badge-secondary" th:unless="${b.status == 'ACTIVE'}" th:text="${b.status}">-</span>
+                        </td>
+                        <td th:text="${#temporals.format(b.createdAt, 'dd MMM yyyy')}">-</td>
+                        <td @click.stop style="width:60px">
+                            <button class="btn btn-ghost btn-sm text-danger"
+                                    th:attr="data-id=${b.id}"
+                                    @click="deleteId = $el.dataset.id; showDelete = true">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(bindings)}">
+                        <td colspan="5" class="text-center text-muted py-4">No bindings yet</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Create Modal -->
+        <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Binding</h5>
+                    <button class="btn-close" @click="showCreate = false"></button>
+                </div>
+                <form hx-post="/bindings"
+                      hx-on::after-request="if(event.detail.successful) showCreate = false">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Agent</label>
+                            <select name="agentId" class="form-select" required>
+                                <option value="">Select agent...</option>
+                                <option th:each="a : ${agents}"
+                                        th:value="${a.agentId}"
+                                        th:text="${a.agentName} + ' (' + ${a.agentId} + ')'">-</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vault</label>
+                            <select name="vaultId" class="form-select" required>
+                                <option value="">Select vault...</option>
+                                <option th:each="v : ${vaults}"
+                                        th:value="${v.vaultId}"
+                                        th:text="${v.vaultName} + ' (' + ${v.vaultId} + ')'">-</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost" @click="showCreate = false">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Binding</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete Confirm Modal -->
+        <div class="modal-overlay" x-show="showDelete" x-cloak @click.self="showDelete = false">
+            <div class="modal-content" style="max-width:380px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Remove Binding</h5>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-0">Are you sure you want to remove this binding?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @click="showDelete = false">Cancel</button>
+                    <button class="btn btn-danger"
+                            @click="htmx.ajax('DELETE', '/bindings/'+deleteId, {}); showDelete = false">
+                        Remove
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>

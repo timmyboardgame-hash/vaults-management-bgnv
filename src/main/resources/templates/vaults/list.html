@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Vaults')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('vaults')}"></div>
+
+    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '' }">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Vaults</h1>
+                <p class="page-subtitle">Manage all registered vaults</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="showCreate = true">
+                <i class="bi bi-plus-lg me-1"></i>Add Vault
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-search">
+                <i class="bi bi-search toolbar-search-icon"></i>
+                <input type="text"
+                       class="form-control"
+                       placeholder="Search vaults..."
+                       name="search"
+                       hx-get="/vaults"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#vaults-tbody"
+                       hx-swap="outerHTML"
+                       hx-include="[name='binding']">
+            </div>
+            <select class="form-select"
+                    name="binding"
+                    hx-get="/vaults"
+                    hx-trigger="change"
+                    hx-target="#vaults-tbody"
+                    hx-swap="outerHTML"
+                    hx-include="[name='search']"
+                    th:value="${currentBinding}">
+                <option value=""            th:selected="${currentBinding == ''}">All Bindings</option>
+                <option value="AVAILABLE"   th:selected="${currentBinding == 'AVAILABLE'}">Available (no agent)</option>
+                <option value="UNAVAILABLE" th:selected="${currentBinding == 'UNAVAILABLE'}">Bound to agent</option>
+            </select>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Vault ID</th>
+                        <th>Name</th>
+                        <th>Slots</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="vaults-tbody" th:fragment="vaults-tbody">
+                    <tr th:if="${vaults.isEmpty()}" class="empty-row">
+                        <td colspan="6" class="text-center">No vaults found</td>
+                    </tr>
+                    <tr th:each="vault : ${vaults}"
+                        class="row-link"
+                        th:attr="data-href='/vaults/' + ${vault.vaultId}"
+                        onclick="window.location.href=this.dataset.href">
+                        <td th:text="${vault.vaultId}">—</td>
+                        <td th:text="${vault.vaultName != null ? vault.vaultName : '—'}">—</td>
+                        <td>
+                            <span class="badge badge-secondary rounded-pill" th:text="${vault.vaultSlot}">—</span>
+                        </td>
+                        <td>
+                            <span class="badge rounded-pill"
+                                  th:text="${vault.vaultStatus}"
+                                  th:classappend="'badge-' + ${vault.vaultStatus}">—</span>
+                        </td>
+                        <td th:text="${vault.createdAt != null ? #temporals.format(vault.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
+                        <td @click.stop>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @click="deleteId = [[${vault.vaultId}]]; showDelete = true">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="row-count" th:text="${vaults.size()} + ' vault(s)'"></div>
+
+        <!-- Create Modal -->
+        <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Vault</h5>
+                    <button type="button" class="btn-close" @click="showCreate = false"></button>
+                </div>
+                <form hx-post="/vaults"
+                      hx-on::after-request="if(event.detail.successful){ showCreate = false; window.location.reload(); }">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Vault ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="vaultId" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vault Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="vaultName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Slots <span class="text-danger">*</span></label>
+                            <select class="form-select" name="vaultSlot" required>
+                                <option value="8">8</option>
+                                <option value="16">16</option>
+                                <option value="24">24</option>
+                                <option value="32">32</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <input type="text" class="form-control" name="description">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" @click="showCreate = false">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete Confirm Modal -->
+        <div class="modal-overlay" x-show="showDelete" x-cloak @click.self="showDelete = false">
+            <div class="modal-content" style="max-width:380px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @click="showDelete = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Delete vault <strong x-text="deleteId"></strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @click="showDelete = false">Cancel</button>
+                    <button class="btn btn-danger btn-sm"
+                            @click="htmx.ajax('DELETE', '/vaults/' + deleteId, {}); showDelete = false">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Bookings')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('bookings')}"></div>
+
+    <main class="main-content" x-data="{ showCreate: false, showCancel: false, cancelId: '' }">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Bookings</h1>
+                <p class="page-subtitle">Monitor and manage all bookings</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="showCreate = true">
+                <i class="bi bi-plus-lg me-1"></i>New Booking
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-search">
+                <i class="bi bi-search toolbar-search-icon"></i>
+                <input type="text"
+                       class="form-control"
+                       placeholder="Search bookings..."
+                       name="search"
+                       hx-get="/bookings"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#bookings-tbody"
+                       hx-swap="outerHTML"
+                       hx-include="[name='status']">
+            </div>
+            <select class="form-select"
+                    name="status"
+                    hx-get="/bookings"
+                    hx-trigger="change"
+                    hx-target="#bookings-tbody"
+                    hx-swap="outerHTML"
+                    hx-include="[name='search']"
+                    th:value="${currentStatus}">
+                <option value="" th:selected="${currentStatus == ''}">All Status</option>
+                <option value="PENDING"   th:selected="${currentStatus == 'PENDING'}">PENDING</option>
+                <option value="CONFIRMED" th:selected="${currentStatus == 'CONFIRMED'}">CONFIRMED</option>
+                <option value="FAILED"    th:selected="${currentStatus == 'FAILED'}">FAILED</option>
+                <option value="CANCELLED" th:selected="${currentStatus == 'CANCELLED'}">CANCELLED</option>
+            </select>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Booking ID</th>
+                        <th>Agent</th>
+                        <th>Item</th>
+                        <th>Slot</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>PIN</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="bookings-tbody" th:fragment="bookings-tbody">
+                    <tr th:if="${bookings.isEmpty()}" class="empty-row">
+                        <td colspan="9" class="text-center">No bookings found</td>
+                    </tr>
+                    <tr th:each="booking : ${bookings}"
+                        class="row-link"
+                        th:attr="data-href='/bookings/' + ${booking.bookingId}"
+                        onclick="window.location.href=this.dataset.href">
+                        <td th:text="${booking.bookingId}">—</td>
+                        <td th:text="${booking.agentName != null ? booking.agentName : booking.agentId}">—</td>
+                        <td th:text="${booking.itemNameEn != null ? booking.itemNameEn : booking.itemId}">—</td>
+                        <td th:text="${booking.slotId != null ? booking.slotId : '—'}">—</td>
+                        <td>
+                            <span class="badge rounded-pill"
+                                  th:text="${booking.bookingStatus}"
+                                  th:classappend="'badge-' + ${booking.bookingStatus}">—</span>
+                        </td>
+                        <td th:text="${booking.bookingDate != null ? booking.bookingDate : '—'}">—</td>
+                        <td th:text="${booking.bookingTimeStart != null ? #temporals.format(booking.bookingTimeStart, 'HH:mm') : '—'}">—</td>
+                        <td>
+                            <code th:if="${booking.pin != null}" th:text="${booking.pin}">—</code>
+                            <span th:unless="${booking.pin != null}">—</span>
+                        </td>
+                        <td @click.stop>
+                            <button th:if="${booking.bookingStatus != 'CANCELLED'}"
+                                    class="btn btn-sm btn-outline-danger"
+                                    th:attr="data-id=${booking.bookingId}"
+                                    @click="cancelId = $el.dataset.id; showCancel = true">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="row-count" th:text="${bookings.size()} + ' booking(s)'"></div>
+
+        <!-- Create Booking Modal -->
+        <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
+            <div class="modal-content" style="max-width:520px">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Booking</h5>
+                    <button class="btn-close" @click="showCreate = false"></button>
+                </div>
+                <form x-data="{ busy: false, errMsg: '' }"
+                      hx-post="/bookings"
+                      @htmx:before-request="busy = true; errMsg = ''"
+                      @htmx:after-request="busy = false; if($event.detail.successful) showCreate = false; else errMsg = $event.detail.xhr.responseText || 'เกิดข้อผิดพลาด'">
+                    <div class="modal-body">
+
+                        <div class="row g-3">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label">Booking ID</label>
+                                <input type="text" name="bookingId" class="form-control"
+                                       placeholder="BK-0001" required>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label">Booking Name</label>
+                                <input type="text" name="bookingName" class="form-control"
+                                       placeholder="e.g. Afternoon session" required>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Agent</label>
+                            <select name="agentId" class="form-select" required>
+                                <option value="">Select agent...</option>
+                                <option th:each="a : ${agents}"
+                                        th:value="${a.agentId}"
+                                        th:text="${a.agentName} + ' (' + ${a.agentId} + ')'">—</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Item (in vault)</label>
+                            <select name="itemId" class="form-select" required>
+                                <option value="">Select item...</option>
+                                <option th:each="vi : ${vaultItems}"
+                                        th:value="${vi.itemId}"
+                                        th:text="${vi.itemNameEn} + ' [' + ${vi.slotId} + '] (' + ${vi.vaultId} + ')'">—</option>
+                            </select>
+                        </div>
+
+                        <div class="row g-3 mt-0">
+                            <div class="col-6">
+                                <label class="form-label">Start Time</label>
+                                <input type="datetime-local" name="bookingTimeStart" class="form-control" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">End Time</label>
+                                <input type="datetime-local" name="bookingTimeEnd" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">PIN <span class="text-muted">(optional)</span></label>
+                            <input type="text" name="pin" class="form-control"
+                                   placeholder="4-6 digits" maxlength="6">
+                        </div>
+
+                    </div>
+                    <div x-show="errMsg" class="mx-3 mb-2">
+                        <div class="alert alert-danger py-2 px-3 mb-0 small" x-text="errMsg"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost" @click="showCreate = false" :disabled="busy">Cancel</button>
+                        <button type="submit" class="btn btn-primary" :disabled="busy">
+                            <span x-show="busy" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span x-text="busy ? 'Creating...' : 'Create Booking'">Create Booking</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Cancel Confirm Modal -->
+        <div class="modal-overlay" x-show="showCancel" x-cloak @click.self="showCancel = false">
+            <div class="modal-content" style="max-width:380px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Cancel</h5>
+                    <button type="button" class="btn-close" @click="showCancel = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Cancel booking <strong x-text="cancelId"></strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @click="showCancel = false">Keep</button>
+                    <button class="btn btn-danger btn-sm"
+                            @click="showCancel = false; fetch('/bookings/' + cancelId, {method: 'DELETE'}).then(() => window.location = '/bookings')">
+                        Cancel Booking
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
