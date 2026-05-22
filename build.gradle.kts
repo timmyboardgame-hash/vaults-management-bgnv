@@ -77,3 +77,17 @@ tasks.withType<JavaCompile> {
     options.release = 21
 }
 
+// GraalVM Native Image — จำกัด RAM เพื่อป้องกัน OOM (exit 137)
+graalvmNative {
+    binaries {
+        named("main") {
+            buildArgs.addAll(
+                "-J-Xmx6g",                    // cap JVM heap ที่ใช้ตอน compile
+                "-J-XX:MaxRAMPercentage=75.0",  // ไม่เกิน 75% ของ RAM ทั้งหมด
+                "--no-fallback",                // บังคับ native เท่านั้น ไม่ fallback เป็น JVM
+                "-O0"                           // ปิด optimization — ประหยัด RAM + เร็วขึ้น
+            )
+        }
+    }
+}
+
