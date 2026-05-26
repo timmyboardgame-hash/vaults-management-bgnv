@@ -30,8 +30,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
-    // PostgreSQL
+    // PostgreSQL (production)
     runtimeOnly("org.postgresql:postgresql")
+
+    // SQLite (dev)
+    runtimeOnly("org.xerial:sqlite-jdbc:3.47.1.0")
+    implementation("org.hibernate.orm:hibernate-community-dialects:6.6.4.Final")
 
     // AWS SDK v2
     implementation("software.amazon.awssdk:s3:$awsSdkVersion")
@@ -42,8 +46,7 @@ dependencies {
     // SpringDoc OpenAPI (Swagger)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.3")
 
-    // H2 in-memory DB — ใช้ตอน dev ที่ยังไม่มี PostgreSQL
-    runtimeOnly("com.h2database:h2")
+    // H2 — ลบออกแล้ว (ใช้ SQLite แทน)
 
     // DevTools — auto restart เมื่อ code เปลี่ยน
     developmentOnly("org.springframework.boot:spring-boot-devtools")

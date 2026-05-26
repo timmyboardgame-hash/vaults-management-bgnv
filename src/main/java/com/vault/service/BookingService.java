@@ -19,14 +19,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+
 
 @Service
 public class BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
+    private static final ZoneId BANGKOK = ZoneId.of("Asia/Bangkok");
+    private static final ZoneOffset BANGKOK_OFFSET = ZoneOffset.ofHours(7);
 
     private final BookingRepository    bookingRepository;
     private final AgentRepository      agentRepository;
@@ -101,6 +107,10 @@ public class BookingService {
         String pin       = req.pin() != null ? req.pin() : generatePin();
         String requestId = UUID.randomUUID().toString();
 
+        // แปลง OffsetDateTime → LocalDateTime (เก็บเป็น Bangkok time ใน DB)
+        LocalDateTime timeStart = req.bookingTimeStart().atZoneSameInstant(BANGKOK).toLocalDateTime();
+        LocalDateTime timeEnd   = req.bookingTimeEnd().atZoneSameInstant(BANGKOK).toLocalDateTime();
+
         // Publish MQTT command ไปยัง kiosk (fire-and-forget)
         // Device ตอบกลับผ่าน events/booking/created → Lambda → PATCH /api/v1/bookings/{id}/iot-event
         awsIotService.publishBookingCreate(
@@ -111,8 +121,8 @@ public class BookingService {
             vaultItem.getRfidTag(),
             item.getItemId(),
             item.getItemNameEn(),
-            req.bookingTimeStart(),
-            req.bookingTimeEnd()
+            timeStart,
+            timeEnd
         );
 
         Booking booking = new Booking();
@@ -123,8 +133,8 @@ public class BookingService {
         booking.setSlotId(vaultItem.getSlotId());
         booking.setRequestId(requestId);
         booking.setBookingStatus("PENDING");
-        booking.setBookingTimeStart(req.bookingTimeStart());
-        booking.setBookingTimeEnd(req.bookingTimeEnd());
+        booking.setBookingTimeStart(timeStart);
+        booking.setBookingTimeEnd(timeEnd);
         booking.setBookingName(req.bookingName());
         booking.setBookingDate(req.bookingDate());
         booking.setPin(pin);
@@ -194,13 +204,19 @@ public class BookingService {
             b.getItem().getItemNameEn(),
             b.getItem().getItemNameTh(),
             b.getSlotId(),
+            b.getVault() != null ? b.getVault().getVaultId() : null,
             b.getBookingStatus(),
-            b.getBookingTimeStart(),
-            b.getBookingTimeEnd(),
+            toOffset(b.getBookingTimeStart()),
+            toOffset(b.getBookingTimeEnd()),
             b.getBookingName(),
             b.getBookingDate(),
             b.getPin(),
-            b.getCreatedAt()
+            toOffset(b.getCreatedAt())
         );
+    }
+
+    /** LocalDateTime (ถือว่าเป็น Bangkok time) → OffsetDateTime +07:00 */
+    private java.time.OffsetDateTime toOffset(LocalDateTime ldt) {
+        return ldt != null ? ldt.atOffset(BANGKOK_OFFSET) : null;
     }
 }

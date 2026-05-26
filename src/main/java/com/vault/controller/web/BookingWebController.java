@@ -65,18 +65,19 @@ public class BookingWebController {
             @RequestParam String itemId,
             @RequestParam(required = false) String pin) {
         try {
-            LocalDateTime timeStart = LocalDateTime.parse(bookingTimeStart);
+            java.time.ZoneOffset bangkokOffset = java.time.ZoneOffset.ofHours(7);
+            java.time.OffsetDateTime timeStart = java.time.LocalDateTime.parse(bookingTimeStart).atOffset(bangkokOffset);
+            java.time.OffsetDateTime timeEnd   = java.time.LocalDateTime.parse(bookingTimeEnd).atOffset(bangkokOffset);
             // derive bookingDate จาก bookingTimeStart — ไม่ต้องส่งแยก
             String bookingDate = timeStart.toLocalDate().toString();
 
             CreateBookingRequest req = new CreateBookingRequest(
                     bookingId,
+                    itemId,
+                    timeStart,
+                    timeEnd,
                     bookingName,
                     bookingDate,
-                    timeStart,
-                    LocalDateTime.parse(bookingTimeEnd),
-                    "PENDING",
-                    itemId,
                     pin
             );
 

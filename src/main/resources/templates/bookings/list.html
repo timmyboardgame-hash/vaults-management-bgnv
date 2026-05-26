@@ -8,7 +8,37 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('bookings')}"></div>
 
-    <main class="main-content" x-data="{ showCreate: false, showCancel: false, cancelId: '' }">
+    <main class="main-content" x-data="{
+        showCreate: false, showCancel: false, cancelId: '',
+        newBookingId: '', newBookingName: '', newPin: '', newTimeStart: '', newTimeEnd: '',
+
+        openCreate() {
+            const now = new Date();
+            const end = new Date(now.getTime() + 60 * 60 * 1000);
+            this.newBookingId   = 'BK-' + Date.now().toString().slice(-6);
+            const p = n => String(n).padStart(2, '0');
+            this.newBookingName = 'Booking ' + now.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' }) + ' ' + p(now.getHours()) + ':' + p(now.getMinutes());
+            this.newPin         = this.generatePin();
+            this.newTimeStart   = this.toDateTimeLocal(now);
+            this.newTimeEnd     = this.toDateTimeLocal(end);
+            this.showCreate     = true;
+        },
+
+        toDateTimeLocal(d) {
+            const p = n => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+        },
+
+        generatePin() {
+            const used = JSON.parse(localStorage.getItem('vault_used_pins') || '[]');
+            let pin, attempts = 0;
+            do { pin = String(Math.floor(100000 + Math.random() * 900000)); attempts++; }
+            while (used.includes(pin) && attempts < 200);
+            used.push(pin);
+            localStorage.setItem('vault_used_pins', JSON.stringify(used.slice(-500)));
+            return pin;
+        }
+    }">
 
         <!-- Page Header -->
         <div class="page-header">
@@ -16,7 +46,7 @@
                 <h1 class="page-title">Bookings</h1>
                 <p class="page-subtitle">Monitor and manage all bookings</p>
             </div>
-            <button class="btn btn-primary btn-sm" @click="showCreate = true">
+            <button class="btn btn-primary btn-sm" @click="openCreate()">
                 <i class="bi bi-plus-lg me-1"></i>New Booking
             </button>
         </div>
@@ -121,12 +151,12 @@
                             <div class="col-12 col-sm-6">
                                 <label class="form-label">Booking ID</label>
                                 <input type="text" name="bookingId" class="form-control"
-                                       placeholder="BK-0001" required>
+                                       x-model="newBookingId" required>
                             </div>
                             <div class="col-12 col-sm-6">
                                 <label class="form-label">Booking Name</label>
                                 <input type="text" name="bookingName" class="form-control"
-                                       placeholder="e.g. Afternoon session" required>
+                                       x-model="newBookingName" required>
                             </div>
                         </div>
 
@@ -146,25 +176,33 @@
                                 <option value="">Select item...</option>
                                 <option th:each="vi : ${vaultItems}"
                                         th:value="${vi.itemId}"
-                                        th:text="${vi.itemNameEn} + ' [' + ${vi.slotId} + '] (' + ${vi.vaultId} + ')'">—</option>
+                                        th:text="${vi.itemNameEn} + ' (' + ${vi.vaultId} + ')'">—</option>
                             </select>
                         </div>
 
                         <div class="row g-3 mt-0">
                             <div class="col-6">
                                 <label class="form-label">Start Time</label>
-                                <input type="datetime-local" name="bookingTimeStart" class="form-control" required>
+                                <input type="datetime-local" name="bookingTimeStart" class="form-control"
+                                       x-model="newTimeStart" required>
                             </div>
                             <div class="col-6">
                                 <label class="form-label">End Time</label>
-                                <input type="datetime-local" name="bookingTimeEnd" class="form-control" required>
+                                <input type="datetime-local" name="bookingTimeEnd" class="form-control"
+                                       x-model="newTimeEnd" required>
                             </div>
                         </div>
 
                         <div class="mt-3">
-                            <label class="form-label">PIN <span class="text-muted">(optional)</span></label>
-                            <input type="text" name="pin" class="form-control"
-                                   placeholder="4-6 digits" maxlength="6">
+                            <label class="form-label">PIN</label>
+                            <div class="input-group">
+                                <input type="text" name="pin" class="form-control font-monospace"
+                                       x-model="newPin" maxlength="6">
+                                <button type="button" class="btn btn-outline-secondary"
+                                        @click="newPin = generatePin()" title="Regenerate">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
                         </div>
 
                     </div>

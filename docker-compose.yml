@@ -1,34 +1,9 @@
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: vault_db
-      POSTGRES_USER: vault
-      POSTGRES_PASSWORD: vault_dev
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vault -d vault_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   app:
     build: .
     ports:
       - "8080:8080"
     env_file:
       - .env
-    environment:
-      DATABASE_URL: jdbc:postgresql://db:5432/vault_db
-      DATABASE_USERNAME: vault
-      DATABASE_PASSWORD: vault_dev
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  postgres_data:
+    volumes:
+      - ./data:/app/data

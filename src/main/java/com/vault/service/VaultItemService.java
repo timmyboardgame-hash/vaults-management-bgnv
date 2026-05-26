@@ -43,8 +43,8 @@ public class VaultItemService {
     }
 
     @Transactional
-    public VaultItemResponse bindItemToVault(String vaultId, String itemId, String slotId) {
-        log.info("[VAULT_ITEM] Binding item={} to vault={} slot={}", itemId, vaultId, slotId);
+    public VaultItemResponse bindItemToVault(String vaultId, String itemId, String rfidTag) {
+        log.info("[VAULT_ITEM] Binding item={} to vault={}", itemId, vaultId);
 
         Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
                 .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
@@ -57,15 +57,10 @@ public class VaultItemService {
             throw new IllegalArgumentException("Item " + itemId + " is already bound to a vault");
         }
 
-        // ป้องกัน slot ถูกใช้ซ้ำใน vault เดียวกัน
-        if (vaultItemRepository.findByVaultIdAndSlotId(vaultId, slotId).isPresent()) {
-            throw new IllegalArgumentException("Slot " + slotId + " is already occupied in vault " + vaultId);
-        }
-
         VaultItem vaultItem = new VaultItem();
         vaultItem.setVault(vault);
         vaultItem.setItem(item);
-        vaultItem.setSlotId(slotId);
+        vaultItem.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
         vaultItem.setStatus("ACTIVE");
 
         return toResponse(vaultItemRepository.save(vaultItem));
@@ -97,7 +92,6 @@ public class VaultItemService {
                 vi.getItem().getItemId(),
                 vi.getItem().getItemNameEn(),
                 vi.getItem().getItemNameTh(),
-                vi.getSlotId(),
                 vi.getRfidTag(),
                 vi.getStatus(),
                 vi.getCreatedAt()

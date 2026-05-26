@@ -14,7 +14,7 @@
         <div class="page-header">
             <div>
                 <h1 class="page-title">Vault Items</h1>
-                <p class="page-subtitle">Item assignments to vault slots</p>
+                <p class="page-subtitle">Item assignments to vault</p>
             </div>
             <button class="btn btn-primary btn-sm" @click="showCreate = true">
                 <i class="bi bi-plus-lg me-1"></i>Assign Item
@@ -27,7 +27,6 @@
                 <thead>
                     <tr>
                         <th>Vault</th>
-                        <th>Slot</th>
                         <th>Item</th>
                         <th>RFID Tag</th>
                         <th>Status</th>
@@ -41,7 +40,6 @@
                             <div th:text="${vi.vaultName}">—</div>
                             <small class="text-muted" th:text="${vi.vaultId}">—</small>
                         </td>
-                        <td><code th:text="${vi.slotId}">—</code></td>
                         <td>
                             <div th:text="${vi.itemNameEn}">—</div>
                             <small class="text-muted" th:text="${vi.itemId}">—</small>
@@ -71,7 +69,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(vaultItems)}">
-                        <td colspan="7" class="text-center text-muted py-4">No items assigned yet</td>
+                        <td colspan="6" class="text-center text-muted py-4">No items assigned yet</td>
                     </tr>
                 </tbody>
             </table>
@@ -109,9 +107,11 @@
                             </p>
                         </div>
                         <div class="mb-3" th:if="${!items.isEmpty()}">
-                            <label class="form-label">Slot ID</label>
-                            <input type="text" name="slotId" class="form-control"
-                                   placeholder="e.g. sl-001" required>
+                            <label class="form-label">RFID Tag <span class="text-muted small">(optional)</span></label>
+                            <input type="text" name="rfidTag" class="form-control font-monospace"
+                                   placeholder="e.g. 300000000000000000000001"
+                                   maxlength="24">
+                            <div class="form-text">EPC format — 24 hex chars ต้องตรงกับ RFID tag จริงบนกล่องบอร์ดเกม</div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -156,7 +156,7 @@
                     <h5 class="modal-title">Remove Assignment</h5>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted mb-0">Remove this item from its vault slot?</p>
+                    <p class="text-muted mb-0">Remove this item from its vault?</p>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-ghost" @click="showUnbind = false">Cancel</button>

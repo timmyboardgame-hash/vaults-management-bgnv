@@ -13,6 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -29,7 +30,10 @@ public class SecurityConfig {
     @Value("${admin.password}")
     private String adminPassword;
 
-    /** Chain 1: REST API — Basic Auth, stateless */
+    @Value("${api.auth-code}")
+    private String apiAuthCode;
+
+    /** Chain 1: REST API — x-auth-code header, stateless */
     @Bean
     @Order(1)
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
@@ -41,7 +45,16 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .anyRequest().authenticated()
             )
-            .httpBasic(basic -> {});
+            .addFilterBefore(new ApiKeyAuthFilter(apiAuthCode),
+                             UsernamePasswordAuthenticationFilter.class)
+            .httpBasic(basic -> {})
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, e) -> {
+                    res.setStatus(401);
+                    res.setContentType("application/json");
+                    res.getWriter().write("{\"error\":\"Unauthorized — provide x-auth-code header or Basic Auth\"}");
+                })
+            );
 
         return http.build();
     }
@@ -94,7 +107,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 

@@ -1,6 +1,6 @@
 package com.vault.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record BookingResponse(
     String id,
@@ -11,11 +11,12 @@ public record BookingResponse(
     String itemNameEn,
     String itemNameTh,
     String slotId,
+    String vaultId,
     String bookingStatus,
-    LocalDateTime bookingTimeStart,
-    LocalDateTime bookingTimeEnd,
+    OffsetDateTime bookingTimeStart,
+    OffsetDateTime bookingTimeEnd,
     String bookingName,
     String bookingDate,
     String pin,
-    LocalDateTime createdAt
+    OffsetDateTime createdAt
 ) {}

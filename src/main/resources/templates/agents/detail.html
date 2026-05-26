@@ -143,18 +143,21 @@
                         <table class="table table-sm mb-0" th:unless="${bv.items().isEmpty()}">
                             <thead>
                                 <tr>
-                                    <th>Slot</th>
                                     <th>Item</th>
+                                    <th>RFID Tag</th>
                                     <th>Status</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:each="vi : ${bv.items()}">
-                                    <td><code th:text="${vi.slotId()}">—</code></td>
                                     <td>
                                         <div th:text="${vi.itemNameEn()}">—</div>
                                         <small class="text-muted" th:text="${vi.itemId()}">—</small>
+                                    </td>
+                                    <td>
+                                        <code th:if="${vi.rfidTag() != null}" th:text="${vi.rfidTag()}" class="small">—</code>
+                                        <span th:unless="${vi.rfidTag() != null}" class="text-muted small fst-italic">not set</span>
                                     </td>
                                     <td>
                                         <span class="badge badge-success" th:if="${vi.status() == 'ACTIVE'}">ACTIVE</span>

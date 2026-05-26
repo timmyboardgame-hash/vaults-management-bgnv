@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -41,20 +42,19 @@ public class BookingController {
 
     // GET /api/v1/bookings/{bookingId}
     @GetMapping("/bookings/{bookingId}")
-    public ResponseEntity<BookingResponse> getBooking(@PathVariable String bookingId) {
+    public ResponseEntity<?> getBooking(@PathVariable String bookingId) {
         return bookingService.getBooking(bookingId)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+            .<ResponseEntity<?>>map(ResponseEntity::ok)
+            .orElse(ResponseEntity.status(404).body(Map.of("error", "Booking not found: " + bookingId)));
     }
 
-    // POST /api/v1/agents/{agentId}/vaults/{vaultId}/bookings
-    @PostMapping("/agents/{agentId}/vaults/{vaultId}/bookings")
+    // POST /api/v1/agents/{agentId}/bookings
+    @PostMapping("/agents/{agentId}/bookings")
     public ResponseEntity<BookingResponse> createBooking(
         @PathVariable String agentId,
-        @PathVariable String vaultId,
         @Valid @RequestBody CreateBookingRequest request
     ) {
-        return ResponseEntity.ok(bookingService.createBooking(agentId, request));
+        return ResponseEntity.status(201).body(bookingService.createBooking(agentId, request));
     }
 
     // DELETE /api/v1/bookings/{bookingId}  (soft delete + CANCELLED)

@@ -3,22 +3,24 @@ spring:
     name: vault-management
 
   datasource:
-    url: ${DATABASE_URL:jdbc:h2:file:./data/vaultdb;AUTO_SERVER=TRUE}
-    username: ${DATABASE_USERNAME:sa}
+    url: ${DATABASE_URL:jdbc:sqlite:./data/vaultdb.db}
+    driver-class-name: ${DB_DRIVER:org.sqlite.JDBC}
+    username: ${DATABASE_USERNAME:}
     password: ${DATABASE_PASSWORD:}
-    driver-class-name: ${DB_DRIVER:org.h2.Driver}
-
-  h2:
-    console:
-      enabled: true   # http://localhost:8080/h2-console (dev only)
 
   jpa:
+    database-platform: ${DB_DIALECT:org.hibernate.community.dialect.SQLiteDialect}
     hibernate:
-      ddl-auto: ${DDL_AUTO:update}  # H2: update / PostgreSQL: validate
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: false
     properties:
       hibernate:
         format_sql: true
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Bangkok
 
   thymeleaf:
     cache: false
@@ -43,6 +45,9 @@ aws:
 admin:
   username: ${ADMIN_USERNAME:admin}
   password: ${ADMIN_PASSWORD:changeme}
+
+api:
+  auth-code: ${API_AUTH_CODE:}
 
 # IoT Lambda callback secret — ต้องตรงกับ IOT_CALLBACK_SECRET ใน Lambda env
 iot:

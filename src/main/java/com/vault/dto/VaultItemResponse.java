@@ -9,7 +9,6 @@ public record VaultItemResponse(
     String itemId,
     String itemNameEn,
     String itemNameTh,
-    String slotId,
     String rfidTag,
     String status,
     LocalDateTime createdAt

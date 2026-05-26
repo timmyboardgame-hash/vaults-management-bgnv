@@ -24,8 +24,8 @@ public class VaultItem {
     @JoinColumn(name = "item_id", nullable = false)
     private Item item;
 
-    @Column(name = "slot_id", nullable = false)
-    private String slotId;  // format: "sl-0001"
+    @Column(name = "slot_id")
+    private String slotId;  // nullable — ไม่ได้กรอกตอน bind แล้ว
 
     @Column(name = "rfid_tag")
     private String rfidTag;  // RFID tag ID (24 hex chars) — ส่งใน MQTT cmd/booking/create tags:[rfidTag]
