@@ -139,9 +139,12 @@ public class BookingService {
         booking.setBookingDate(req.bookingDate());
         booking.setPin(pin);
 
-        Booking saved = bookingRepository.save(booking);
+        Booking saved = bookingRepository.saveAndFlush(booking);
         log.info("[BOOKING] Created booking={} vault={} slot={} status=PENDING", saved.getBookingId(), vaultId, saved.getSlotId());
-        return toResponse(saved);
+        // Reload เพื่อให้ได้ @CreationTimestamp ที่ Hibernate set ใน DB
+        return bookingRepository.findById(saved.getId())
+            .map(this::toResponse)
+            .orElse(toResponse(saved));
     }
 
     @Transactional
