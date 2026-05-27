@@ -104,7 +104,10 @@ public class BookingService {
             .orElseThrow(() -> new IllegalArgumentException(
                 "Agent " + agentId + " is not bound to vault " + vaultId));
 
-        String pin       = req.pin() != null ? req.pin() : generatePin();
+        // PIN priority: request → item defaultPin → random
+        String pin = req.pin() != null && !req.pin().isBlank()
+                ? req.pin()
+                : (item.getDefaultPin() != null ? item.getDefaultPin() : generatePin());
         String requestId = UUID.randomUUID().toString();
 
         // แปลง OffsetDateTime → LocalDateTime (เก็บเป็น Bangkok time ใน DB)

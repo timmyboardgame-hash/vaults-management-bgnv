@@ -21,5 +21,6 @@ public record CreateItemRequest(
     String remark2,
     String remark3,
     String remark4,
-    String remark5
+    String remark5,
+    String defaultPin
 ) {}

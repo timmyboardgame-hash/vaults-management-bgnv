@@ -65,13 +65,14 @@ public class ItemWebController {
             @RequestParam(required = false) Double difficultyRating,
             @RequestParam(required = false) String linkBoardgamegeek,
             @RequestParam(required = false) String linkVideo,
-            @RequestParam(required = false) String remark1) {
+            @RequestParam(required = false) String remark1,
+            @RequestParam(required = false) String defaultPin) {
         try {
             itemService.createItem(new CreateItemRequest(
                 itemId, itemNameEn, itemNameTh, itemStatus, itemImageUrl,
                 gameCode, playerCountMin, playerCountMax, difficultyRating,
                 playTimeMin, playTimeMax, linkBoardgamegeek, null, linkVideo,
-                remark1, null, null, null, null));
+                remark1, null, null, null, null, defaultPin));
             return ResponseEntity.ok().header("HX-Redirect", "/items").build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());

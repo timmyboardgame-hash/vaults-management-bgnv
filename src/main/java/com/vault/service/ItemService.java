@@ -71,6 +71,7 @@ public class ItemService {
         item.setRemark3(req.remark3());
         item.setRemark4(req.remark4());
         item.setRemark5(req.remark5());
+        item.setDefaultPin(req.defaultPin() != null && !req.defaultPin().isBlank() ? req.defaultPin().trim() : null);
         return toResponse(itemRepository.save(item));
     }
 

@@ -173,6 +173,10 @@
                             <label class="form-label">Remark</label>
                             <input type="text" class="form-control" name="remark1">
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Default PIN <span class="text-muted fw-normal small">(ถ้าว่าง = random ทุกครั้ง)</span></label>
+                            <input type="text" class="form-control font-monospace" name="defaultPin" maxlength="6" placeholder="e.g. 123456">
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm" @click="showCreate = false">Cancel</button>
