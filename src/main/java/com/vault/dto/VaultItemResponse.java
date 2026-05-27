@@ -10,6 +10,7 @@ public record VaultItemResponse(
     String itemNameEn,
     String itemNameTh,
     String rfidTag,
+    String defaultPin,
     String status,
     LocalDateTime createdAt
 ) {}

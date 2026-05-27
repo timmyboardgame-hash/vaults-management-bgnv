@@ -80,7 +80,8 @@ public class ItemService {
                                    Integer playerCountMin, Integer playerCountMax,
                                    Double difficultyRating,
                                    Integer playTimeMin, Integer playTimeMax,
-                                   String linkBoardgamegeek, String linkVideo, String remark1) {
+                                   String linkBoardgamegeek, String linkVideo, String remark1,
+                                   String defaultPin) {
         log.info("[ITEM] Updating item {}", itemId);
         Item item = itemRepository.findByItemIdAndDeletedAtIsNull(itemId)
             .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
@@ -96,6 +97,8 @@ public class ItemService {
         item.setLinkBoardgamegeek(linkBoardgamegeek);
         item.setLinkVideo(linkVideo);
         item.setRemark1(remark1);
+        // defaultPin: null หรือ blank → clear, มีค่า → save
+        item.setDefaultPin(defaultPin != null && !defaultPin.isBlank() ? defaultPin.trim() : null);
         return toResponse(itemRepository.save(item));
     }
 
@@ -116,6 +119,7 @@ public class ItemService {
             i.getDifficultyRating(), i.getPlayTimeMin(), i.getPlayTimeMax(),
             i.getLinkBoardgamegeek(), i.getLinkPictures(), i.getLinkVideo(),
             i.getRemark1(), i.getRemark2(), i.getRemark3(), i.getRemark4(), i.getRemark5(),
+            i.getDefaultPin(),
             i.getCreatedAt()
         );
     }

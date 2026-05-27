@@ -23,5 +23,6 @@ public record ItemResponse(
     String remark3,
     String remark4,
     String remark5,
+    String defaultPin,
     LocalDateTime createdAt
 ) {}

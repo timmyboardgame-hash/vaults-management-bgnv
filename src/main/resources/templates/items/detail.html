@@ -62,6 +62,13 @@
                         <span class="detail-value" th:text="${item.gameCode != null ? item.gameCode : '—'}">—</span>
                     </div>
                     <div class="detail-row">
+                        <span class="detail-label">Default PIN</span>
+                        <span class="detail-value">
+                            <code th:if="${item.defaultPin != null}" th:text="${item.defaultPin}">—</code>
+                            <span th:unless="${item.defaultPin != null}" class="text-muted">— (random)</span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
                         <span class="detail-label">Created</span>
                         <span class="detail-value"
                               th:text="${item.createdAt != null ? #temporals.format(item.createdAt, 'dd/MM/yyyy HH:mm') : '—'}">—</span>
@@ -194,6 +201,11 @@
                                 <label class="form-label">Remark</label>
                                 <input type="text" name="remark1" class="form-control"
                                        th:value="${item.remark1}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Default PIN <span class="text-muted fw-normal">(ถ้าว่าง = random ทุกครั้ง)</span></label>
+                                <input type="text" name="defaultPin" class="form-control font-monospace"
+                                       th:value="${item.defaultPin}" maxlength="6" placeholder="e.g. 123456">
                             </div>
                         </div>
                     </div>

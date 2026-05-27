@@ -93,6 +93,7 @@ public class VaultItemService {
                 vi.getItem().getItemNameEn(),
                 vi.getItem().getItemNameTh(),
                 vi.getRfidTag(),
+                vi.getItem().getDefaultPin(),
                 vi.getStatus(),
                 vi.getCreatedAt()
         );

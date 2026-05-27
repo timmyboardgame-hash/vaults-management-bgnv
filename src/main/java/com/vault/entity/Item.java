@@ -72,6 +72,9 @@ public class Item {
     @Column(name = "remark_5")
     private String remark5;
 
+    @Column(name = "default_pin")
+    private String defaultPin;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -150,6 +153,9 @@ public class Item {
 
     public String getRemark5() { return remark5; }
     public void setRemark5(String remark5) { this.remark5 = remark5; }
+
+    public String getDefaultPin() { return defaultPin; }
+    public void setDefaultPin(String defaultPin) { this.defaultPin = defaultPin; }
 
     public LocalDateTime getDeletedAt() { return deletedAt; }
     public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }

@@ -37,6 +37,12 @@
             used.push(pin);
             localStorage.setItem('vault_used_pins', JSON.stringify(used.slice(-500)));
             return pin;
+        },
+
+        onItemChange(e) {
+            const opt = e.target.selectedOptions[0];
+            const itemPin = opt ? opt.dataset.defaultPin : '';
+            this.newPin = itemPin || this.generatePin();
         }
     }">
 
@@ -172,11 +178,12 @@
 
                         <div class="mt-3">
                             <label class="form-label">Item (in vault)</label>
-                            <select name="itemId" class="form-select" required>
+                            <select name="itemId" class="form-select" required @change="onItemChange($event)">
                                 <option value="">Select item...</option>
                                 <option th:each="vi : ${vaultItems}"
                                         th:value="${vi.itemId}"
-                                        th:text="${vi.itemNameEn} + ' (' + ${vi.vaultId} + ')'">—</option>
+                                        th:text="${vi.itemNameEn} + ' (' + ${vi.vaultId} + ')'"
+                                        th:attr="data-default-pin=${vi.defaultPin}">—</option>
                             </select>
                         </div>
 
