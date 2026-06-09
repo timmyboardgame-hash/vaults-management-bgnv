@@ -150,7 +150,7 @@
                 <form x-data="{ busy: false, errMsg: '' }"
                       hx-post="/bookings"
                       @htmx:before-request="busy = true; errMsg = ''"
-                      @htmx:after-request="busy = false; if($event.detail.successful) showCreate = false; else errMsg = $event.detail.xhr.responseText || 'เกิดข้อผิดพลาด'">
+                      @htmx:after-request="busy = false; if($event.detail.xhr.status >= 200 && $event.detail.xhr.status < 300) showCreate = false; else if($event.detail.xhr.status >= 400) errMsg = $event.detail.xhr.responseText || 'เกิดข้อผิดพลาด'">
                     <div class="modal-body">
 
                         <div class="row g-3">
