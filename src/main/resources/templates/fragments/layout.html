@@ -61,6 +61,11 @@
             <i class="bi bi-calendar-check-fill"></i>
             <span>Bookings</span>
         </a>
+        <a th:href="@{/booking-monitor}"
+           th:class="${active == 'booking-monitor'} ? 'sidebar-link active' : 'sidebar-link'">
+            <i class="bi bi-grid-3x3-gap-fill"></i>
+            <span>Booking Monitor</span>
+        </a>
         <a th:href="@{/vault-items}"
            th:class="${active == 'vault-items'} ? 'sidebar-link active' : 'sidebar-link'">
             <i class="bi bi-box-seam-fill"></i>

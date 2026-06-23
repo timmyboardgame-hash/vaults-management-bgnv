@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Booking Monitor')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('booking-monitor')}"></div>
+
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Booking Monitor</h1>
+                <p class="page-subtitle">สถานะ booking ปัจจุบันของทุก vault — คลิก slot เพื่อดู detail</p>
+            </div>
+        </div>
+
+        <div th:if="${vaults.isEmpty()}" class="detail-card">
+            <p class="text-muted mb-0">No vaults found</p>
+        </div>
+
+        <div th:each="vault : ${vaults}" class="detail-card" style="margin-bottom: 1rem;">
+            <div class="detail-card-title" style="display:flex; align-items:center; justify-content:space-between;">
+                <span>
+                    <i class="bi bi-safe2-fill me-2"></i>
+                    <span th:text="${vault.vaultName}">Vault</span>
+                </span>
+                <span class="badge rounded-pill"
+                      th:text="${vault.online} ? 'ONLINE' : 'OFFLINE'"
+                      th:classappend="${vault.online} ? 'badge-ONLINE' : 'badge-OFFLINE'">—</span>
+            </div>
+
+            <div th:if="${vault.slots.isEmpty()}" class="text-muted" style="font-size:0.85rem;">
+                ยังไม่มี item ผูกกับ vault นี้
+            </div>
+
+            <div class="bm-slot-grid">
+                <div th:each="slot : ${vault.slots}"
+                     class="bm-slot"
+                     th:classappend="${slot.occupied} ? 'bm-slot--' + ${slot.currentStatus} : 'bm-slot--empty'"
+                     th:attr="data-href='/booking-monitor/' + ${vault.vaultId} + '/' + ${slot.itemId}"
+                     onclick="window.location.href=this.dataset.href">
+                    <div class="bm-slot-id" th:text="${slot.slotId != null ? slot.slotId : '—'}">sl-0001</div>
+                    <div class="bm-slot-item" th:text="${slot.itemNameEn}">Item</div>
+                    <span th:if="${slot.occupied}" class="badge rounded-pill"
+                          th:text="${slot.currentStatus}"
+                          th:classappend="'badge-' + ${slot.currentStatus}">—</span>
+                    <span th:unless="${slot.occupied}" class="text-muted" style="font-size:0.75rem;">ว่าง</span>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

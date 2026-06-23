@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Booking Monitor Detail')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('booking-monitor')}"></div>
+
+    <main class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">
+                    <i class="bi bi-safe2-fill me-2"></i>
+                    <span th:text="${data.vaultName} + ' — ' + ${data.itemNameEn}">Vault — Item</span>
+                </h1>
+                <p class="page-subtitle">Item booking detail &amp; timeline</p>
+            </div>
+            <a href="/booking-monitor" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Monitor
+            </a>
+        </div>
+
+        <div class="row g-3">
+            <!-- Current Booking -->
+            <div class="col-12">
+                <div class="detail-card">
+                    <div class="detail-card-title">Current Booking</div>
+
+                    <div th:if="${data.currentBooking == null}" class="text-muted" style="font-size:0.875rem;">
+                        ไม่มี booking ที่กำลังใช้งาน
+                    </div>
+
+                    <div th:if="${data.currentBooking != null}" class="bm-current-card"
+                         style="padding: 0.25rem 0 0.25rem 0.75rem;">
+                        <div class="detail-row">
+                            <span class="detail-label">Booking ID</span>
+                            <span class="detail-value" th:text="${data.currentBooking.bookingId}">—</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Status</span>
+                            <span class="detail-value">
+                                <span class="badge rounded-pill"
+                                      th:text="${data.currentBooking.status}"
+                                      th:classappend="'badge-' + ${data.currentBooking.status}">—</span>
+                            </span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Agent</span>
+                            <span class="detail-value" th:text="${data.currentBooking.agentName} + ' (' + ${data.currentBooking.agentId} + ')'">—</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Start</span>
+                            <span class="detail-value" th:text="${#temporals.format(data.currentBooking.bookingTimeStart, 'dd/MM/yyyy HH:mm')}">—</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">End</span>
+                            <span class="detail-value" th:text="${#temporals.format(data.currentBooking.bookingTimeEnd, 'dd/MM/yyyy HH:mm')}">—</span>
+                        </div>
+                        <div class="detail-row" th:if="${data.currentBooking.pin != null}">
+                            <span class="detail-label">PIN</span>
+                            <span class="detail-value"><code th:text="${data.currentBooking.pin}">—</code></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History / Timeline -->
+            <div class="col-12">
+                <div class="detail-card">
+                    <div class="detail-card-title"
+                         th:text="'Booking History (' + ${data.history.size()} + ' รายการ)'">Booking History</div>
+
+                    <div th:if="${data.history.isEmpty()}" class="text-muted" style="font-size:0.875rem;">
+                        ยังไม่มีประวัติการจอง
+                    </div>
+
+                    <div class="bm-timeline">
+                        <div th:each="booking : ${data.history}" class="bm-timeline-booking">
+                            <div class="bm-timeline-header">
+                                <div>
+                                    <span style="font-weight:600;" th:text="${booking.itemNameEn}">Item</span>
+                                    <span class="text-muted" style="margin-left:0.5rem; font-size:0.78rem;"
+                                          th:text="${booking.agentName}">Agent</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <code th:text="${booking.bookingId}">—</code>
+                                    <span class="badge rounded-pill"
+                                          th:text="${booking.finalStatus}"
+                                          th:classappend="'badge-' + ${booking.finalStatus}">—</span>
+                                </div>
+                            </div>
+                            <div class="text-muted" style="font-size:0.78rem; margin-bottom:0.5rem;">
+                                <i class="bi bi-clock me-1"></i>
+                                <span th:text="${#temporals.format(booking.bookingTimeStart, 'dd/MM/yyyy HH:mm')}">—</span>
+                                —
+                                <span th:text="${#temporals.format(booking.bookingTimeEnd, 'HH:mm')}">—</span>
+                            </div>
+
+                            <div class="bm-timeline-events">
+                                <div th:each="event : ${booking.events}" class="bm-timeline-event">
+                                    <div class="bm-timeline-dot"></div>
+                                    <div class="bm-timeline-content">
+                                        <span class="bm-timeline-status" th:text="${event.status}">STATUS</span>
+                                        <span class="bm-timeline-time"
+                                              th:text="${#temporals.format(event.occurredAt, 'dd/MM HH:mm')}">—</span>
+                                        <span th:if="${event.note != null}" class="bm-timeline-note" th:text="${event.note}">note</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
