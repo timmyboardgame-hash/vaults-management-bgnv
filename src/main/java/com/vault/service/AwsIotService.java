@@ -111,6 +111,38 @@ public class AwsIotService {
     }
 
     /**
+     * Publish cmd/booking/extend → kiosk (fire-and-forget)
+     * DB อัปเดต bookingTimeEnd ก่อนแล้ว — device respond เป็น events/booking/extended
+     */
+    public void publishBookingExtend(String thingName, String bookingId, String requestId,
+                                     LocalDateTime validUntil) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishBookingExtend booking={}", bookingId);
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("booking_id",  bookingId);
+        payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+
+        publishMqtt("vault/" + thingName + "/cmd/booking/extend", requestId, payload);
+        log.info("[IoT] Published booking/extend booking={} thing={}", bookingId, thingName);
+    }
+
+    /**
+     * Publish cmd/system/force_unlock → kiosk (admin override — เปิดตู้ฉุกเฉิน)
+     * Device respond ด้วย events/booking/anomaly anomaly_type=force_unlock เพื่อ audit
+     */
+    public void publishForceUnlock(String thingName, String requestId, String reason) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishForceUnlock thing={}", thingName);
+            return;
+        }
+        Map<String, Object> payload = Map.of("reason", reason != null ? reason : "admin-override");
+        publishMqtt("vault/" + thingName + "/cmd/system/force_unlock", requestId, payload);
+        log.info("[IoT] Published system/force_unlock thing={}", thingName);
+    }
+
+    /**
      * Publish cmd/booking/cancel → kiosk (fire-and-forget)
      * booking ใน DB ถูก CANCELLED ก่อนแล้ว — device respond เป็น informational เท่านั้น
      */

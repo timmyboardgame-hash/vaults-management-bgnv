@@ -2,6 +2,7 @@ package com.vault.controller;
 
 import com.vault.dto.BookingResponse;
 import com.vault.dto.CreateBookingRequest;
+import com.vault.dto.ExtendBookingRequest;
 import com.vault.dto.IotEventRequest;
 import com.vault.service.BookingService;
 import jakarta.validation.Valid;
@@ -55,6 +56,15 @@ public class BookingController {
         @Valid @RequestBody CreateBookingRequest request
     ) {
         return ResponseEntity.status(201).body(bookingService.createBooking(agentId, request));
+    }
+
+    // PATCH /api/v1/bookings/{bookingId}/extend
+    @PatchMapping("/bookings/{bookingId}/extend")
+    public ResponseEntity<BookingResponse> extendBooking(
+        @PathVariable String bookingId,
+        @RequestBody ExtendBookingRequest request
+    ) {
+        return ResponseEntity.ok(bookingService.extendBooking(bookingId, request.validUntil()));
     }
 
     // DELETE /api/v1/bookings/{bookingId}  (soft delete + CANCELLED)

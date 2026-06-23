@@ -11,8 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class VaultService {
@@ -21,9 +23,23 @@ public class VaultService {
     private static final Set<Integer> VALID_SLOTS = Set.of(8, 16, 24, 32);
 
     private final VaultRepository vaultRepository;
+    private final AwsIotService   awsIotService;
 
-    public VaultService(VaultRepository vaultRepository) {
+    public VaultService(VaultRepository vaultRepository, AwsIotService awsIotService) {
         this.vaultRepository = vaultRepository;
+        this.awsIotService   = awsIotService;
+    }
+
+    /** Admin override — เปิดตู้ฉุกเฉิน โดยไม่อ้างอิง booking */
+    public Map<String, String> forceUnlock(String vaultId, String reason) {
+        log.warn("[VAULT] Force unlock requested vault={} reason={}", vaultId, reason);
+        Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
+            .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason is required for force_unlock");
+        }
+        awsIotService.publishForceUnlock(vault.getVaultId(), UUID.randomUUID().toString(), reason);
+        return Map.of("vaultId", vaultId, "status", "command_sent", "reason", reason);
     }
 
     public List<VaultResponse> listVaults() {
