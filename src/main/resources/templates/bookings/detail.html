@@ -8,7 +8,7 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('bookings')}"></div>
 
-    <main class="main-content">
+    <main class="main-content" x-data="{ showCancel: false }">
         <!-- Page Header -->
         <div class="page-header">
             <div>
@@ -71,6 +71,13 @@
                         <span class="detail-value"
                               th:text="${booking.createdAt != null ? #temporals.format(booking.createdAt, 'dd/MM/yyyy HH:mm') : '—'}">—</span>
                     </div>
+
+                    <div th:if="${booking.bookingStatus != 'CANCELLED' and booking.bookingStatus != 'RETURNED' and booking.bookingStatus != 'FAILED'}"
+                         style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                        <button class="btn btn-sm btn-outline-danger" @click="showCancel = true">
+                            <i class="bi bi-x-circle me-1"></i>Cancel Booking
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -110,6 +117,28 @@
                 </div>
             </div>
         </div>
+
+        <!-- Cancel Confirm Modal -->
+        <div class="modal-overlay" x-show="showCancel" x-cloak @click.self="showCancel = false">
+            <div class="modal-content" style="max-width:380px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Cancel</h5>
+                    <button type="button" class="btn-close" @click="showCancel = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Cancel booking <strong th:text="${booking.bookingId}">—</strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @click="showCancel = false">Keep</button>
+                    <button class="btn btn-danger btn-sm"
+                            th:attr="data-id=${booking.bookingId}"
+                            @click="showCancel = false; fetch('/bookings/' + $el.dataset.id, {method: 'DELETE'}).then(() => window.location = '/bookings')">
+                        Cancel Booking
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </main>
 </div>
 

@@ -5,11 +5,13 @@ import com.vault.dto.CreateBookingRequest;
 import com.vault.dto.IotEventRequest;
 import com.vault.entity.Agent;
 import com.vault.entity.Booking;
+import com.vault.entity.BookingStatusEvent;
 import com.vault.entity.Item;
 import com.vault.entity.VaultItem;
 import com.vault.repository.AgentRepository;
 import com.vault.repository.BindingRepository;
 import com.vault.repository.BookingRepository;
+import com.vault.repository.BookingStatusEventRepository;
 import com.vault.repository.ItemRepository;
 import com.vault.repository.VaultItemRepository;
 import org.slf4j.Logger;
@@ -34,7 +36,8 @@ public class BookingService {
     private static final ZoneId BANGKOK = ZoneId.of("Asia/Bangkok");
     private static final ZoneOffset BANGKOK_OFFSET = ZoneOffset.ofHours(7);
 
-    private final BookingRepository    bookingRepository;
+    private final BookingRepository            bookingRepository;
+    private final BookingStatusEventRepository bookingStatusEventRepository;
     private final AgentRepository      agentRepository;
     private final ItemRepository       itemRepository;
     private final VaultItemRepository  vaultItemRepository;
@@ -42,17 +45,28 @@ public class BookingService {
     private final AwsIotService        awsIotService;
 
     public BookingService(BookingRepository   bookingRepository,
+                          BookingStatusEventRepository bookingStatusEventRepository,
                           AgentRepository     agentRepository,
                           ItemRepository      itemRepository,
                           VaultItemRepository vaultItemRepository,
                           BindingRepository   bindingRepository,
                           AwsIotService       awsIotService) {
         this.bookingRepository   = bookingRepository;
+        this.bookingStatusEventRepository = bookingStatusEventRepository;
         this.agentRepository     = agentRepository;
         this.itemRepository      = itemRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bindingRepository   = bindingRepository;
         this.awsIotService       = awsIotService;
+    }
+
+    /** บันทึก timeline event ของการเปลี่ยนสถานะ booking — ใช้สำหรับ booking-monitor detail page */
+    private void recordStatusEvent(Booking booking, String status, String note) {
+        BookingStatusEvent event = new BookingStatusEvent();
+        event.setBooking(booking);
+        event.setStatus(status);
+        event.setNote(note);
+        bookingStatusEventRepository.save(event);
     }
 
     public List<BookingResponse> getAllBookings() {
@@ -139,11 +153,15 @@ public class BookingService {
         booking.setBookingTimeStart(timeStart);
         booking.setBookingTimeEnd(timeEnd);
         booking.setBookingName(req.bookingName());
-        booking.setBookingDate(req.bookingDate());
+        // bookingDate: ใช้ค่าที่ส่งมา หรือ derive จาก bookingTimeStart ถ้าไม่ได้ส่ง
+        booking.setBookingDate(req.bookingDate() != null && !req.bookingDate().isBlank()
+                ? req.bookingDate()
+                : timeStart.toLocalDate().toString());
         booking.setPin(pin);
 
         Booking saved = bookingRepository.saveAndFlush(booking);
         log.info("[BOOKING] Created booking={} vault={} slot={} status=PENDING", saved.getBookingId(), vaultId, saved.getSlotId());
+        recordStatusEvent(saved, "PENDING", pin != null ? "PIN: " + pin : null);
         // Reload เพื่อให้ได้ @CreationTimestamp ที่ Hibernate set ใน DB
         return bookingRepository.findById(saved.getId())
             .map(this::toResponse)
@@ -167,8 +185,10 @@ public class BookingService {
 
         booking.setBookingStatus("CANCELLED");
         booking.setDeletedAt(LocalDateTime.now());
+        Booking saved = bookingRepository.save(booking);
+        recordStatusEvent(saved, "CANCELLED", null);
         log.info("[BOOKING] Cancelled booking={}", bookingId);
-        return toResponse(bookingRepository.save(booking));
+        return toResponse(saved);
     }
 
     /**
@@ -192,7 +212,8 @@ public class BookingService {
         if (!newStatus.equals(booking.getBookingStatus())) {
             log.info("[IoT-EVENT] booking={} status {} → {}", bookingId, booking.getBookingStatus(), newStatus);
             booking.setBookingStatus(newStatus);
-            bookingRepository.save(booking);
+            Booking saved = bookingRepository.save(booking);
+            recordStatusEvent(saved, newStatus, req.error());
         }
     }
 
