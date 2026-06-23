@@ -100,16 +100,13 @@
                         <div th:each="booking : ${data.history}" class="bm-timeline-booking">
                             <div class="bm-timeline-header">
                                 <div>
-                                    <span style="font-weight:600;" th:text="${booking.itemNameEn}">Item</span>
+                                    <code style="font-size:0.85rem;" th:text="${booking.bookingId}">—</code>
                                     <span class="text-muted" style="margin-left:0.5rem; font-size:0.78rem;"
                                           th:text="${booking.agentName}">Agent</span>
                                 </div>
-                                <div style="display:flex; align-items:center; gap:0.5rem;">
-                                    <code th:text="${booking.bookingId}">—</code>
-                                    <span class="badge rounded-pill"
-                                          th:text="${booking.finalStatus}"
-                                          th:classappend="'badge-' + ${booking.finalStatus}">—</span>
-                                </div>
+                                <span class="badge rounded-pill"
+                                      th:text="${booking.finalStatus}"
+                                      th:classappend="'badge-' + ${booking.finalStatus}">—</span>
                             </div>
                             <div class="text-muted" style="font-size:0.78rem; margin-bottom:0.5rem;">
                                 <i class="bi bi-clock me-1"></i>
