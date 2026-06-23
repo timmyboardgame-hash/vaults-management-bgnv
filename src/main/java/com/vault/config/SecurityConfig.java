@@ -43,8 +43,9 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // iot-event callback มี x-iot-secret auth ของตัวเอง — ไม่ต้องการ x-auth-code
+                // iot callbacks มี x-iot-secret auth ของตัวเอง — ไม่ต้องการ x-auth-code
                 .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/bookings/*/iot-event").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/vaults/*/iot-system-event").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(new ApiKeyAuthFilter(apiAuthCode),
