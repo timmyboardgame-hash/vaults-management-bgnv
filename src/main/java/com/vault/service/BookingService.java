@@ -169,6 +169,34 @@ public class BookingService {
     }
 
     @Transactional
+    public BookingResponse extendBooking(String bookingId, java.time.OffsetDateTime validUntil) {
+        log.info("[BOOKING] Extending booking={} until={}", bookingId, validUntil);
+        Booking booking = bookingRepository.findByBookingIdAndDeletedAtIsNull(bookingId)
+            .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
+
+        String status = booking.getBookingStatus();
+        if ("RETURNED".equals(status) || "CANCELLED".equals(status) || "FAILED".equals(status)) {
+            throw new IllegalArgumentException("Cannot extend booking in status: " + status);
+        }
+
+        LocalDateTime newEnd = validUntil.atZoneSameInstant(BANGKOK).toLocalDateTime();
+        booking.setBookingTimeEnd(newEnd);
+        Booking saved = bookingRepository.save(booking);
+
+        String requestId = UUID.randomUUID().toString();
+        if (booking.getVault() != null) {
+            awsIotService.publishBookingExtend(
+                booking.getVault().getVaultId(), bookingId, requestId, newEnd);
+        } else {
+            log.warn("[BOOKING] No vault on booking={} — skipping MQTT extend", bookingId);
+        }
+
+        recordStatusEvent(saved, status, "Extended until: " + validUntil);
+        log.info("[BOOKING] Extended booking={} until={}", bookingId, newEnd);
+        return toResponse(saved);
+    }
+
+    @Transactional
     public BookingResponse cancelBooking(String bookingId) {
         log.info("[BOOKING] Cancelling booking={}", bookingId);
         Booking booking = bookingRepository.findByBookingIdAndDeletedAtIsNull(bookingId)
@@ -201,11 +229,20 @@ public class BookingService {
         Booking booking = bookingRepository.findByBookingIdAndDeletedAtIsNull(bookingId)
             .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
 
+        if ("booking_anomaly".equals(req.event())) {
+            String anomalyType = req.anomalyType() != null ? req.anomalyType() : "unknown";
+            String level = "lockdown_triggered".equals(anomalyType) ? "CRITICAL" : "WARNING";
+            log.warn("[IoT-EVENT] ANOMALY booking={} type={} level={}", bookingId, anomalyType, level);
+            recordStatusEvent(booking, "ANOMALY:" + anomalyType, req.error());
+            return;
+        }
+
         String newStatus = switch (req.event()) {
             case "booking_created"   -> "success".equals(req.result()) ? "CONFIRMED" : "FAILED";
             case "booking_picked_up" -> "ACTIVE";
             case "booking_returned"  -> "RETURNED";
             case "booking_cancelled" -> "CANCELLED";  // informational — device ack cancel
+            case "booking_extended"  -> booking.getBookingStatus(); // informational — DB already updated
             default -> booking.getBookingStatus();
         };
 

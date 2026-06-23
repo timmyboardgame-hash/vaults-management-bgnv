@@ -62,6 +62,26 @@
                             <span class="detail-label">PIN</span>
                             <span class="detail-value"><code th:text="${data.currentBooking.pin}">—</code></span>
                         </div>
+
+                        <!-- IoT Event Log สำหรับ current booking -->
+                        <div th:if="${!data.currentBooking.events.isEmpty()}"
+                             style="margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+                            <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                                IoT Event Log
+                            </div>
+                            <div class="bm-timeline-events">
+                                <div th:each="event : ${data.currentBooking.events}" class="bm-timeline-event">
+                                    <div class="bm-timeline-dot"
+                                         th:classappend="${#strings.startsWith(event.status,'ANOMALY')} ? ' bm-dot-anomaly' : ''"></div>
+                                    <div class="bm-timeline-content">
+                                        <span class="bm-timeline-status" th:text="${event.status}">STATUS</span>
+                                        <span class="bm-timeline-time"
+                                              th:text="${#temporals.format(event.occurredAt, 'dd/MM HH:mm:ss')}">—</span>
+                                        <span th:if="${event.note != null}" class="bm-timeline-note" th:text="${event.note}">note</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

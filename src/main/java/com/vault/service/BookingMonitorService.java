@@ -82,6 +82,12 @@ public class BookingMonitorService {
                 .filter(b -> TERMINAL_STATUSES.contains(b.getBookingStatus()))
                 .toList();
 
+        List<StatusEventDto> currentEvents = current != null
+                ? bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(current.getId())
+                        .stream().map(e -> new StatusEventDto(e.getStatus(), toOffset(e.getOccurredAt()), e.getNote()))
+                        .toList()
+                : List.of();
+
         CurrentBookingDto currentDto = current != null ? new CurrentBookingDto(
                 current.getBookingId(),
                 current.getAgent().getAgentId(),
@@ -90,7 +96,8 @@ public class BookingMonitorService {
                 current.getBookingStatus(),
                 toOffset(current.getBookingTimeStart()),
                 toOffset(current.getBookingTimeEnd()),
-                current.getPin()
+                current.getPin(),
+                currentEvents
         ) : null;
 
         List<HistoryBookingDto> historyDtos = historyBookings.stream().map(b -> {

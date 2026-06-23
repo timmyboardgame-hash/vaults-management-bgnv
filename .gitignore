@@ -30,6 +30,9 @@ CLAUDE.md
 memory.md
 .claude/
 
+# Docs (local only)
+docs/
+
 # Docker artifacts
 *.bz2
 *.tar

@@ -36,7 +36,8 @@ public class BookingMonitorDto {
         String status,
         OffsetDateTime bookingTimeStart,
         OffsetDateTime bookingTimeEnd,
-        String pin
+        String pin,
+        List<StatusEventDto> events
     ) {}
 
     public record HistoryBookingDto(
