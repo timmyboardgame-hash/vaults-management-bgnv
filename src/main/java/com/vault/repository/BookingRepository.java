@@ -26,12 +26,13 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     List<Booking> findByStatus(@Param("status") String status);
 
     // ไม่กรอง deletedAt — booking ที่ CANCELLED ถูก soft-delete แต่ต้องยังโชว์ใน history
+    // sort ตาม updatedAt เพื่อให้ booking ที่มี activity (IoT event) ล่าสุดขึ้นก่อน
     @Query("SELECT b FROM Booking b WHERE b.vault.vaultId = :vaultId AND b.item.itemId = :itemId " +
-           "ORDER BY b.createdAt DESC")
+           "ORDER BY b.updatedAt DESC")
     List<Booking> findByVaultAndItemBusinessId(@Param("vaultId") String vaultId, @Param("itemId") String itemId);
 
     @Query("SELECT b FROM Booking b WHERE b.vault.vaultId = :vaultId AND b.item.itemId = :itemId " +
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL " +
-           "ORDER BY b.createdAt DESC")
+           "ORDER BY b.updatedAt DESC")
     List<Booking> findActiveByVaultAndItemBusinessId(@Param("vaultId") String vaultId, @Param("itemId") String itemId);
 }
