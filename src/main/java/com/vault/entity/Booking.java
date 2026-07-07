@@ -56,6 +56,9 @@ public class Booking {
     @Column(name = "pin")
     private String pin;
 
+    @Column(name = "serial_number")
+    private String serialNumber;  // เลข barcode กล่องบอร์ดเกม — required ที่ app layer (SQLite ไม่ enforce)
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -107,6 +110,9 @@ public class Booking {
 
     public String getPin() { return pin; }
     public void setPin(String pin) { this.pin = pin; }
+
+    public String getSerialNumber() { return serialNumber; }
+    public void setSerialNumber(String serialNumber) { this.serialNumber = serialNumber; }
 
     public LocalDateTime getDeletedAt() { return deletedAt; }
     public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }

@@ -49,13 +49,14 @@ public class BookingController {
             .orElse(ResponseEntity.status(404).body(Map.of("error", "Booking not found: " + bookingId)));
     }
 
-    // POST /api/v1/agents/{agentId}/bookings
-    @PostMapping("/agents/{agentId}/bookings")
+    // POST /api/v1/shops/{shopId}/bookings
+    // path เดิม /agents/{agentId}/bookings คงไว้เป็น alias — caller เก่ายังใช้ได้ระหว่าง migrate
+    @PostMapping({"/shops/{shopId}/bookings", "/agents/{shopId}/bookings"})
     public ResponseEntity<BookingResponse> createBooking(
-        @PathVariable String agentId,
+        @PathVariable String shopId,
         @Valid @RequestBody CreateBookingRequest request
     ) {
-        return ResponseEntity.status(201).body(bookingService.createBooking(agentId, request));
+        return ResponseEntity.status(201).body(bookingService.createBooking(shopId, request));
     }
 
     // PATCH /api/v1/bookings/{bookingId}/extend

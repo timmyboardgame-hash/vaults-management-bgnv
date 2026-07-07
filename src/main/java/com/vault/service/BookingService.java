@@ -158,6 +158,7 @@ public class BookingService {
                 ? req.bookingDate()
                 : timeStart.toLocalDate().toString());
         booking.setPin(pin);
+        booking.setSerialNumber(req.serialNumber());
 
         Booking saved = bookingRepository.saveAndFlush(booking);
         log.info("[BOOKING] Created booking={} vault={} slot={} status=PENDING", saved.getBookingId(), vaultId, saved.getSlotId());
@@ -275,6 +276,7 @@ public class BookingService {
             b.getBookingName(),
             b.getBookingDate(),
             b.getPin(),
+            b.getSerialNumber(),
             toOffset(b.getCreatedAt())
         );
     }
