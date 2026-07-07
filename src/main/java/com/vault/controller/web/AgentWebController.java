@@ -109,6 +109,7 @@ public class AgentWebController {
     @ResponseBody
     public ResponseEntity<String> update(
             @PathVariable String agentId,
+            @RequestParam(required = false) String newAgentId,
             @RequestParam(required = false) String agentName,
             @RequestParam(required = false) String agentStatus,
             @RequestParam(required = false) String phone,
@@ -117,8 +118,8 @@ public class AgentWebController {
             @RequestParam(required = false) String promotion,
             @RequestParam(required = false) String remark1) {
         try {
-            agentService.updateAgent(agentId, agentName, agentStatus, phone, address, mapUrl, promotion, remark1);
-            return ResponseEntity.ok().header("HX-Redirect", "/agents/" + agentId).build();
+            var updated = agentService.updateAgent(agentId, newAgentId, agentName, agentStatus, phone, address, mapUrl, promotion, remark1);
+            return ResponseEntity.ok().header("HX-Redirect", "/agents/" + updated.agentId()).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
