@@ -90,7 +90,7 @@
                         </td>
                         <td th:text="${agent.phone != null ? agent.phone : '—'}">—</td>
                         <td th:text="${agent.createdAt != null ? #temporals.format(agent.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
-                        <td @click.stop style="width:90px">
+                        <td @click.stop style="width:110px; white-space:nowrap">
                             <button class="btn btn-sm btn-ghost"
                                     th:attr="data-orig-id=${agent.agentId},data-agent-id=${agent.agentId},data-name=${agent.agentName != null ? agent.agentName : ''},data-status=${agent.agentStatus},data-phone=${agent.phone != null ? agent.phone : ''},data-address=${agent.address != null ? agent.address : ''},data-map-url=${agent.mapUrl != null ? agent.mapUrl : ''},data-promotion=${agent.promotion != null ? agent.promotion : ''},data-remark1=${agent.remark1 != null ? agent.remark1 : ''}"
                                     @click="ed = {...$el.dataset}; showEdit = true"

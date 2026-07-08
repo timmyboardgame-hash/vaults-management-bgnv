@@ -67,7 +67,7 @@
                             <span class="badge badge-secondary" th:unless="${vi.status == 'ACTIVE'}" th:text="${vi.status}">—</span>
                         </td>
                         <td th:text="${vi.createdAt != null ? #temporals.format(vi.createdAt, 'dd MMM yyyy') : '—'}">—</td>
-                        <td @click.stop style="width:90px">
+                        <td @click.stop style="width:110px; white-space:nowrap">
                             <button class="btn btn-ghost btn-sm"
                                     th:attr="data-id=${vi.id},data-tag=${vi.rfidTag != null ? vi.rfidTag : ''},data-serial=${vi.serialNumber != null ? vi.serialNumber : ''}"
                                     @click="editTagId = $el.dataset.id; editTagValue = $el.dataset.tag; editSerialValue = $el.dataset.serial; showEditTag = true"

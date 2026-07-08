@@ -16,6 +16,13 @@
             </div>
         </div>
 
+        <!-- auto-refresh ทุก 5s เฉพาะตอน tab active -->
+        <div id="bm-grid" th:fragment="bm-grid"
+             hx-get="/booking-monitor"
+             hx-trigger="every 5s [document.visibilityState=='visible']"
+             hx-target="#bm-grid"
+             hx-swap="outerHTML">
+
         <div th:if="${vaults.isEmpty()}" class="detail-card">
             <p class="text-muted mb-0">No vaults found</p>
         </div>
@@ -50,6 +57,8 @@
                 </div>
             </div>
         </div>
+
+        </div><!-- /#bm-grid -->
     </main>
 </div>
 

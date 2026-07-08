@@ -5,6 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Controller
@@ -18,8 +19,11 @@ public class BookingMonitorWebController {
     }
 
     @GetMapping
-    public String grid(Model model) {
+    public String grid(Model model,
+                       @RequestHeader(value = "HX-Request", required = false) String htmx) {
         model.addAttribute("vaults", bookingMonitorService.getMonitorGrid());
+        // HTMX polling — ส่งเฉพาะ grid fragment
+        if (htmx != null) return "booking-monitor/list :: bm-grid";
         return "booking-monitor/list";
     }
 
