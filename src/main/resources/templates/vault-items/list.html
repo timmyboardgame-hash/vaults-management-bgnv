@@ -8,7 +8,16 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('vault-items')}"></div>
 
-    <main class="main-content" x-data="{ showCreate: false, showUnbind: false, unbindId: '', showEditTag: false, editTagId: '', editTagValue: '' }">
+    <main class="main-content" x-data="{ showCreate: false, showUnbind: false, unbindId: '', showEditTag: false, editTagId: '', editTagValue: '', editSerialValue: '',
+        saveCopy() {
+            this.showEditTag = false;
+            fetch('/vault-items/' + this.editTagId + '/copy', {
+                method:'PATCH',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                body:'rfidTag='+encodeURIComponent(this.editTagValue)+'&serialNumber='+encodeURIComponent(this.editSerialValue)
+            }).then(r => r.ok ? window.location = '/vault-items' : r.text().then(t => alert(t)));
+        }
+    }">
 
         <!-- Page Header -->
         <div class="page-header">
@@ -28,6 +37,7 @@
                     <tr>
                         <th>Vault</th>
                         <th>Item</th>
+                        <th>Serial Number</th>
                         <th>RFID Tag</th>
                         <th>Status</th>
                         <th>Assigned</th>
@@ -45,6 +55,10 @@
                             <small class="text-muted" th:text="${vi.itemId}">—</small>
                         </td>
                         <td>
+                            <code th:if="${vi.serialNumber != null}" th:text="${vi.serialNumber}" class="small">—</code>
+                            <span th:unless="${vi.serialNumber != null}" class="text-muted small fst-italic">not set</span>
+                        </td>
+                        <td>
                             <code th:if="${vi.rfidTag != null}" th:text="${vi.rfidTag}" class="small">—</code>
                             <span th:unless="${vi.rfidTag != null}" class="text-muted small fst-italic">not set</span>
                         </td>
@@ -55,9 +69,9 @@
                         <td th:text="${vi.createdAt != null ? #temporals.format(vi.createdAt, 'dd MMM yyyy') : '—'}">—</td>
                         <td @click.stop style="width:90px">
                             <button class="btn btn-ghost btn-sm"
-                                    th:attr="data-id=${vi.id},data-tag=${vi.rfidTag != null ? vi.rfidTag : ''}"
-                                    @click="editTagId = $el.dataset.id; editTagValue = $el.dataset.tag; showEditTag = true"
-                                    title="Edit RFID Tag">
+                                    th:attr="data-id=${vi.id},data-tag=${vi.rfidTag != null ? vi.rfidTag : ''},data-serial=${vi.serialNumber != null ? vi.serialNumber : ''}"
+                                    @click="editTagId = $el.dataset.id; editTagValue = $el.dataset.tag; editSerialValue = $el.dataset.serial; showEditTag = true"
+                                    title="Edit Copy">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <button class="btn btn-ghost btn-sm text-danger"
@@ -69,7 +83,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(vaultItems)}">
-                        <td colspan="6" class="text-center text-muted py-4">No items assigned yet</td>
+                        <td colspan="7" class="text-center text-muted py-4">No items assigned yet</td>
                     </tr>
                 </tbody>
             </table>
@@ -96,17 +110,21 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Item</label>
-                            <select name="itemId" class="form-select" required th:if="${!items.isEmpty()}">
+                            <select name="itemId" class="form-select" required>
                                 <option value="">Select item...</option>
                                 <option th:each="item : ${items}"
                                         th:value="${item.itemId}"
                                         th:text="${item.itemNameEn} + ' (' + ${item.itemId} + ')'">—</option>
                             </select>
-                            <p th:if="${items.isEmpty()}" class="text-muted small mb-0 mt-1">
-                                All items are already assigned to a vault
-                            </p>
+                            <div class="form-text">item เดียวกัน assign ได้หลายกล่อง — แยกด้วย serial number</div>
                         </div>
-                        <div class="mb-3" th:if="${!items.isEmpty()}">
+                        <div class="mb-3">
+                            <label class="form-label">Serial Number</label>
+                            <input type="text" name="serialNumber" class="form-control font-monospace"
+                                   placeholder="เลข barcode กล่อง" required>
+                            <div class="form-text">unique ต่อ item — ระบุกล่องจริง</div>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">RFID Tag <span class="text-muted small">(optional)</span></label>
                             <input type="text" name="rfidTag" class="form-control font-monospace"
                                    placeholder="e.g. 300000000000000000000001"
@@ -123,28 +141,35 @@
             </div>
         </div>
 
-        <!-- Edit RFID Tag Modal -->
+        <!-- Edit Copy Modal (Serial + RFID Tag) -->
         <div class="modal-overlay" x-show="showEditTag" x-cloak @click.self="showEditTag = false">
             <div class="modal-content" style="max-width:420px">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit RFID Tag</h5>
+                    <h5 class="modal-title">Edit Copy</h5>
                     <button class="btn-close" @click="showEditTag = false"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="form-label">RFID Tag <span class="text-muted small">(24 hex chars)</span></label>
-                    <input type="text" class="form-control font-monospace"
-                           x-model="editTagValue"
-                           placeholder="e.g. 300000000000000000000001"
-                           maxlength="24"
-                           @keydown.enter="showEditTag = false; fetch('/vault-items/' + editTagId + '/rfid-tag', {method:'PATCH', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'rfidTag='+encodeURIComponent(editTagValue)}).then(() => window.location = '/vault-items')">
-                    <div class="form-text">EPC format — ต้องตรงกับ RFID tag จริงบนกล่องบอร์ดเกม</div>
+                    <div class="mb-3">
+                        <label class="form-label">Serial Number</label>
+                        <input type="text" class="form-control font-monospace"
+                               x-model="editSerialValue"
+                               placeholder="เลข barcode กล่อง"
+                               @keydown.enter="saveCopy()">
+                        <div class="form-text">เปลี่ยนไม่ได้ถ้ากล่องนี้มี booking ค้างอยู่</div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label">RFID Tag <span class="text-muted small">(24 hex chars)</span></label>
+                        <input type="text" class="form-control font-monospace"
+                               x-model="editTagValue"
+                               placeholder="e.g. 300000000000000000000001"
+                               maxlength="24"
+                               @keydown.enter="saveCopy()">
+                        <div class="form-text">EPC format — ต้องตรงกับ RFID tag จริงบนกล่องบอร์ดเกม</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-ghost" @click="showEditTag = false">Cancel</button>
-                    <button class="btn btn-primary"
-                            @click="showEditTag = false; fetch('/vault-items/' + editTagId + '/rfid-tag', {method:'PATCH', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'rfidTag='+encodeURIComponent(editTagValue)}).then(() => window.location = '/vault-items')">
-                        Save
-                    </button>
+                    <button class="btn btn-primary" @click="saveCopy()">Save</button>
                 </div>
             </div>
         </div>

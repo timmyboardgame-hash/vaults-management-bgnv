@@ -15,7 +15,8 @@ public class Agent {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @Column(name = "agent_id", unique = true, nullable = false)
+    // ไม่ใช้ unique constraint ที่ DB — validate ที่ app layer เฉพาะ record ที่ยังไม่ถูก soft delete
+    @Column(name = "agent_id", nullable = false)
     private String agentId;
 
     @Column(name = "agent_name", nullable = false)

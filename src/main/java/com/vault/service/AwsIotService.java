@@ -89,7 +89,7 @@ public class AwsIotService {
      */
     public void publishBookingCreate(String thingName, String bookingId, String requestId,
                                      String pin, String rfidTag,
-                                     String gameId, String gameTitle,
+                                     String gameId, String gameTitle, String serialNumber,
                                      LocalDateTime validFrom, LocalDateTime validUntil) {
         if (!isConfigured()) {
             log.warn("[IoT] Not configured — skipping publishBookingCreate booking={}", bookingId);
@@ -104,6 +104,7 @@ public class AwsIotService {
         payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         payload.put("game_id",    gameId);
         payload.put("game_title", gameTitle);
+        payload.put("serial_number", serialNumber);  // ระบุกล่องจริง — item เดียวกันมีหลาย copy
         payload.put("locker_id",  1);
 
         publishMqtt("vault/" + thingName + "/cmd/booking/create", requestId, payload);

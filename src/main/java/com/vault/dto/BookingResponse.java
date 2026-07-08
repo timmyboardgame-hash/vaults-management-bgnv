@@ -18,5 +18,6 @@ public record BookingResponse(
     String bookingName,
     String bookingDate,
     String pin,
+    String serialNumber,
     OffsetDateTime createdAt
 ) {}

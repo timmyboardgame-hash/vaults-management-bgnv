@@ -9,6 +9,7 @@ public record VaultItemResponse(
     String itemId,
     String itemNameEn,
     String itemNameTh,
+    String serialNumber,
     String rfidTag,
     String defaultPin,
     String status,

@@ -194,6 +194,11 @@
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-12 col-sm-6">
+                                <label class="form-label">Agent ID</label>
+                                <input type="text" name="newAgentId" class="form-control"
+                                       th:value="${agent.agentId}" required>
+                            </div>
+                            <div class="col-12 col-sm-6">
                                 <label class="form-label">Name</label>
                                 <input type="text" name="agentName" class="form-control"
                                        th:value="${agent.agentName}" required>

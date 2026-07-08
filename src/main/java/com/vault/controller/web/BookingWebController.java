@@ -63,7 +63,8 @@ public class BookingWebController {
             @RequestParam String bookingTimeEnd,
             @RequestParam String agentId,
             @RequestParam String itemId,
-            @RequestParam(required = false) String pin) {
+            @RequestParam(required = false) String pin,
+            @RequestParam String serialNumber) {
         try {
             java.time.ZoneOffset bangkokOffset = java.time.ZoneOffset.ofHours(7);
             java.time.OffsetDateTime timeStart = java.time.LocalDateTime.parse(bookingTimeStart).atOffset(bangkokOffset);
@@ -78,7 +79,8 @@ public class BookingWebController {
                     timeEnd,
                     bookingName,
                     bookingDate,
-                    pin
+                    pin,
+                    serialNumber
             );
 
             // vaultId หาใน service ผ่าน VaultItem + ตรวจ binding agent↔vault ด้วย

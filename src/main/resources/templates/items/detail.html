@@ -139,6 +139,11 @@
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-12 col-sm-6">
+                                <label class="form-label">Item ID</label>
+                                <input type="text" name="newItemId" class="form-control font-monospace"
+                                       th:value="${item.itemId}" required>
+                            </div>
+                            <div class="col-12 col-sm-6">
                                 <label class="form-label">Name EN</label>
                                 <input type="text" name="itemNameEn" class="form-control"
                                        th:value="${item.itemNameEn}" required>

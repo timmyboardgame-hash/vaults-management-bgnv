@@ -29,15 +29,8 @@ public class VaultItemWebController {
         var activeVaultItems = vaultItemService.listAllActive();
         model.addAttribute("vaultItems", activeVaultItems);
         model.addAttribute("vaults", vaultService.listVaults());
-
-        // เฉพาะ item ที่ยังไม่มี active VaultItem
-        var boundItemIds = activeVaultItems.stream()
-                .map(vi -> vi.itemId())
-                .collect(java.util.stream.Collectors.toSet());
-        var availableItems = itemService.listItems().stream()
-                .filter(i -> !boundItemIds.contains(i.itemId()))
-                .toList();
-        model.addAttribute("items", availableItems);
+        // item เดียวกัน bind ได้หลายกล่อง (ต่าง serial) — แสดงทุก item เสมอ
+        model.addAttribute("items", itemService.listItems());
         return "vault-items/list";
     }
 
@@ -46,22 +39,25 @@ public class VaultItemWebController {
     public ResponseEntity<String> bind(
             @RequestParam String vaultId,
             @RequestParam String itemId,
+            @RequestParam String serialNumber,
             @RequestParam(required = false) String rfidTag) {
         try {
-            vaultItemService.bindItemToVault(vaultId, itemId, rfidTag);
+            vaultItemService.bindItemToVault(vaultId, itemId, serialNumber, rfidTag);
             return ResponseEntity.ok().header("HX-Redirect", "/vault-items").build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    @PatchMapping("/{vaultItemId}/rfid-tag")
+    // แก้ RFID tag + serial ของ copy — serial เปลี่ยนไม่ได้ถ้ามี booking ค้าง
+    @PatchMapping("/{vaultItemId}/copy")
     @ResponseBody
-    public ResponseEntity<String> updateRfidTag(
+    public ResponseEntity<String> updateCopy(
             @PathVariable String vaultItemId,
-            @RequestParam String rfidTag) {
+            @RequestParam(required = false) String rfidTag,
+            @RequestParam(required = false) String serialNumber) {
         try {
-            vaultItemService.updateRfidTag(vaultItemId, rfidTag);
+            vaultItemService.updateCopy(vaultItemId, rfidTag, serialNumber);
             return ResponseEntity.ok().header("HX-Redirect", "/vault-items").build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());

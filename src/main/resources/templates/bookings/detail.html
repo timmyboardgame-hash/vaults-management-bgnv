@@ -67,6 +67,13 @@
                         </span>
                     </div>
                     <div class="detail-row">
+                        <span class="detail-label">Serial Number</span>
+                        <span class="detail-value">
+                            <code th:if="${booking.serialNumber != null}" th:text="${booking.serialNumber}">—</code>
+                            <span th:unless="${booking.serialNumber != null}">—</span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
                         <span class="detail-label">Created</span>
                         <span class="detail-value"
                               th:text="${booking.createdAt != null ? #temporals.format(booking.createdAt, 'dd/MM/yyyy HH:mm') : '—'}">—</span>

@@ -15,7 +15,9 @@ public class Item {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @Column(name = "item_id", unique = true, nullable = false)
+    // ไม่ใช้ unique constraint ที่ DB — validate ที่ app layer เฉพาะ record ที่ยังไม่ถูก soft delete
+    // itemId เป็น external ID จาก third-party (เป็น UUID ได้) — แก้ไขได้ FK อ้าง DB id อยู่แล้ว
+    @Column(name = "item_id", nullable = false)
     private String itemId;
 
     @Column(name = "item_name_en", nullable = false)

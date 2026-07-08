@@ -75,9 +75,10 @@ public class VaultWebController {
     public ResponseEntity<String> bindItem(
             @PathVariable String vaultId,
             @RequestParam String itemId,
-            @RequestParam String slotId) {
+            @RequestParam String serialNumber,
+            @RequestParam(required = false) String rfidTag) {
         try {
-            vaultItemService.bindItemToVault(vaultId, itemId, slotId);
+            vaultItemService.bindItemToVault(vaultId, itemId, serialNumber, rfidTag);
             return ResponseEntity.ok().header("HX-Redirect", "/vaults/" + vaultId).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());

@@ -70,12 +70,20 @@ public class AgentService {
     }
 
     @Transactional
-    public AgentResponse updateAgent(String agentId, String agentName, String agentStatus,
+    public AgentResponse updateAgent(String agentId, String newAgentId,
+                                     String agentName, String agentStatus,
                                      String phone, String address, String mapUrl,
                                      String promotion, String remark1) {
         log.info("[AGENT] Updating agent {}", agentId);
         Agent agent = agentRepository.findByAgentIdAndDeletedAtIsNull(agentId)
             .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
+        // เปลี่ยน agentId ได้ — FK อ้าง DB id (UUID) อยู่แล้ว booking/binding เดิมไม่กระทบ
+        if (newAgentId != null && !newAgentId.isBlank() && !newAgentId.equals(agentId)) {
+            if (agentRepository.existsByAgentIdAndDeletedAtIsNull(newAgentId)) {
+                throw new IllegalArgumentException("Agent ID already exists: " + newAgentId);
+            }
+            agent.setAgentId(newAgentId);
+        }
         if (agentName  != null) agent.setAgentName(agentName);
         if (agentStatus != null) agent.setAgentStatus(agentStatus);
         agent.setPhone(phone);

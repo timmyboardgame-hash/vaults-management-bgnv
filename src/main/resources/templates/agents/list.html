@@ -8,7 +8,18 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('agents')}"></div>
 
-    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '' }">
+    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '', showEdit: false, ed: {},
+        saveEdit() {
+            this.showEdit = false;
+            const p = new URLSearchParams({
+                newAgentId: this.ed.agentId || '', agentName: this.ed.name || '', agentStatus: this.ed.status || '',
+                phone: this.ed.phone || '', address: this.ed.address || '', mapUrl: this.ed.mapUrl || '',
+                promotion: this.ed.promotion || '', remark1: this.ed.remark1 || ''
+            });
+            fetch('/agents/' + this.ed.origId, {method:'PATCH', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:p})
+                .then(r => r.ok ? window.location = '/agents' : r.text().then(t => alert(t)));
+        }
+    }">
 
         <!-- Page Header -->
         <div class="page-header">
@@ -79,7 +90,13 @@
                         </td>
                         <td th:text="${agent.phone != null ? agent.phone : '—'}">—</td>
                         <td th:text="${agent.createdAt != null ? #temporals.format(agent.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
-                        <td @click.stop>
+                        <td @click.stop style="width:90px">
+                            <button class="btn btn-sm btn-ghost"
+                                    th:attr="data-orig-id=${agent.agentId},data-agent-id=${agent.agentId},data-name=${agent.agentName != null ? agent.agentName : ''},data-status=${agent.agentStatus},data-phone=${agent.phone != null ? agent.phone : ''},data-address=${agent.address != null ? agent.address : ''},data-map-url=${agent.mapUrl != null ? agent.mapUrl : ''},data-promotion=${agent.promotion != null ? agent.promotion : ''},data-remark1=${agent.remark1 != null ? agent.remark1 : ''}"
+                                    @click="ed = {...$el.dataset}; showEdit = true"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger"
                                     @click="deleteId = [[${agent.agentId}]]; showDelete = true">
                                 <i class="bi bi-trash"></i>
@@ -90,6 +107,59 @@
             </table>
         </div>
         <div class="row-count" th:text="${agents.size()} + ' agent(s)'"></div>
+
+        <!-- Edit Agent Modal -->
+        <div class="modal-overlay" x-show="showEdit" x-cloak @click.self="showEdit = false">
+            <div class="modal-content" style="max-width:520px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Agent</h5>
+                    <button class="btn-close" @click="showEdit = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Agent ID</label>
+                            <input type="text" class="form-control font-monospace" x-model="ed.agentId" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-control" x-model="ed.name" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" x-model="ed.status">
+                                <option value="ENABLE">ENABLE</option>
+                                <option value="DISABLE">DISABLE</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" x-model="ed.phone">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address</label>
+                            <textarea class="form-control" rows="2" x-model="ed.address"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Map URL</label>
+                            <input type="text" class="form-control" x-model="ed.mapUrl">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Promotion</label>
+                            <input type="text" class="form-control" x-model="ed.promotion">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Remark 1</label>
+                            <input type="text" class="form-control" x-model="ed.remark1">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @click="showEdit = false">Cancel</button>
+                    <button class="btn btn-primary" @click="saveEdit()">Save</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Create Modal -->
         <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">

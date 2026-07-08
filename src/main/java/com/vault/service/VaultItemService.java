@@ -23,13 +23,16 @@ public class VaultItemService {
     private final VaultItemRepository vaultItemRepository;
     private final VaultRepository vaultRepository;
     private final ItemRepository itemRepository;
+    private final com.vault.repository.BookingRepository bookingRepository;
 
     public VaultItemService(VaultItemRepository vaultItemRepository,
                             VaultRepository vaultRepository,
-                            ItemRepository itemRepository) {
+                            ItemRepository itemRepository,
+                            com.vault.repository.BookingRepository bookingRepository) {
         this.vaultItemRepository = vaultItemRepository;
         this.vaultRepository = vaultRepository;
         this.itemRepository = itemRepository;
+        this.bookingRepository = bookingRepository;
     }
 
     public List<VaultItemResponse> listByVault(String vaultId) {
@@ -43,8 +46,8 @@ public class VaultItemService {
     }
 
     @Transactional
-    public VaultItemResponse bindItemToVault(String vaultId, String itemId, String rfidTag) {
-        log.info("[VAULT_ITEM] Binding item={} to vault={}", itemId, vaultId);
+    public VaultItemResponse bindItemToVault(String vaultId, String itemId, String serialNumber, String rfidTag) {
+        log.info("[VAULT_ITEM] Binding item={} serial={} to vault={}", itemId, serialNumber, vaultId);
 
         Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
                 .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
@@ -52,14 +55,18 @@ public class VaultItemService {
         Item item = itemRepository.findByItemIdAndDeletedAtIsNull(itemId)
                 .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
-        // ป้องกัน item ถูก bind ซ้ำ
-        if (vaultItemRepository.findActiveByItemId(item.getId()).isPresent()) {
-            throw new IllegalArgumentException("Item " + itemId + " is already bound to a vault");
+        if (serialNumber == null || serialNumber.isBlank()) {
+            throw new IllegalArgumentException("serialNumber is required — 1 copy ต่อ 1 serial");
+        }
+        // item เดียวกัน bind ได้หลายกล่อง แต่ serial unique ทั้งระบบ (identity ของกล่อง)
+        if (vaultItemRepository.existsBySerial(serialNumber.trim())) {
+            throw new IllegalArgumentException("Serial already exists: " + serialNumber);
         }
 
         VaultItem vaultItem = new VaultItem();
         vaultItem.setVault(vault);
         vaultItem.setItem(item);
+        vaultItem.setSerialNumber(serialNumber.trim());
         vaultItem.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
         vaultItem.setStatus("ACTIVE");
 
@@ -77,10 +84,25 @@ public class VaultItemService {
     }
 
     @Transactional
-    public VaultItemResponse updateRfidTag(String vaultItemId, String rfidTag) {
+    public VaultItemResponse updateCopy(String vaultItemId, String rfidTag, String serialNumber) {
         VaultItem vi = vaultItemRepository.findById(vaultItemId)
                 .orElseThrow(() -> new IllegalArgumentException("VaultItem not found: " + vaultItemId));
-        vi.setRfidTag(rfidTag != null ? rfidTag.trim() : null);
+
+        // เปลี่ยน serial ได้เฉพาะตอนไม่มี booking ค้าง — booking เก็บ serial เป็น snapshot
+        // ถ้าแก้ระหว่างลูกค้ายืมอยู่ การ validate ตอนคืนจะ mismatch
+        if (serialNumber != null && !serialNumber.isBlank()
+                && !serialNumber.trim().equals(vi.getSerialNumber())) {
+            if (bookingRepository.existsActiveByItemAndSerial(vi.getItem().getId(), vi.getSerialNumber())) {
+                throw new IllegalArgumentException(
+                    "Cannot change serial — copy has an active booking");
+            }
+            if (vaultItemRepository.existsBySerial(serialNumber.trim())) {
+                throw new IllegalArgumentException("Serial already exists: " + serialNumber);
+            }
+            vi.setSerialNumber(serialNumber.trim());
+        }
+
+        vi.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
         return toResponse(vaultItemRepository.save(vi));
     }
 
@@ -92,6 +114,7 @@ public class VaultItemService {
                 vi.getItem().getItemId(),
                 vi.getItem().getItemNameEn(),
                 vi.getItem().getItemNameTh(),
+                vi.getSerialNumber(),
                 vi.getRfidTag(),
                 vi.getItem().getDefaultPin(),
                 vi.getStatus(),
