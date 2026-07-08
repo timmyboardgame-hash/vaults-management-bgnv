@@ -12,7 +12,6 @@ import com.vault.repository.AgentRepository;
 import com.vault.repository.BindingRepository;
 import com.vault.repository.BookingRepository;
 import com.vault.repository.BookingStatusEventRepository;
-import com.vault.repository.ItemRepository;
 import com.vault.repository.VaultItemRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +38,6 @@ public class BookingService {
     private final BookingRepository            bookingRepository;
     private final BookingStatusEventRepository bookingStatusEventRepository;
     private final AgentRepository      agentRepository;
-    private final ItemRepository       itemRepository;
     private final VaultItemRepository  vaultItemRepository;
     private final BindingRepository    bindingRepository;
     private final AwsIotService        awsIotService;
@@ -47,14 +45,12 @@ public class BookingService {
     public BookingService(BookingRepository   bookingRepository,
                           BookingStatusEventRepository bookingStatusEventRepository,
                           AgentRepository     agentRepository,
-                          ItemRepository      itemRepository,
                           VaultItemRepository vaultItemRepository,
                           BindingRepository   bindingRepository,
                           AwsIotService       awsIotService) {
         this.bookingRepository   = bookingRepository;
         this.bookingStatusEventRepository = bookingStatusEventRepository;
         this.agentRepository     = agentRepository;
-        this.itemRepository      = itemRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bindingRepository   = bindingRepository;
         this.awsIotService       = awsIotService;
@@ -107,19 +103,22 @@ public class BookingService {
         Agent agent = agentRepository.findByAgentIdAndDeletedAtIsNull(agentId)
             .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
-        Item item = itemRepository.findByItemIdAndDeletedAtIsNull(req.itemId())
-            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + req.itemId()));
-
-        // item เดียวกันมีหลายกล่อง (ต่าง serial) — ระบุ copy ด้วย item + serialNumber
+        // serial คือ identity ของกล่อง — resolve ด้วย serial เป็นหลัก
+        // itemId เป็น soft check: ถ้าไม่ตรงกับ item จริงของกล่อง แค่ log warning แล้วใช้ item จริงแทน
         String serial = req.serialNumber().trim();
-        VaultItem vaultItem = vaultItemRepository.findActiveByItemIdAndSerial(item.getId(), serial)
+        VaultItem vaultItem = vaultItemRepository.findActiveBySerial(serial)
             .orElseThrow(() -> new IllegalArgumentException(
-                "Item copy not found in any vault: " + req.itemId() + " serial=" + serial));
+                "Item copy not found in any vault: serial=" + serial));
+
+        Item item = vaultItem.getItem();
+        if (!item.getItemId().equals(req.itemId())) {
+            log.warn("[BOOKING] itemId mismatch booking={} requested={} actual={} serial={} — using copy's item",
+                req.bookingId(), req.itemId(), item.getItemId(), serial);
+        }
 
         // กัน double-booking กล่องเดียวกัน
         if (bookingRepository.existsActiveByItemAndSerial(item.getId(), serial)) {
-            throw new IllegalArgumentException(
-                "Copy already booked: " + req.itemId() + " serial=" + serial);
+            throw new IllegalArgumentException("Copy already booked: serial=" + serial);
         }
 
         String vaultId = vaultItem.getVault().getVaultId();

@@ -58,10 +58,9 @@ public class VaultItemService {
         if (serialNumber == null || serialNumber.isBlank()) {
             throw new IllegalArgumentException("serialNumber is required — 1 copy ต่อ 1 serial");
         }
-        // item เดียวกัน bind ได้หลายกล่อง แต่ serial ห้ามซ้ำภายใน item เดียวกัน
-        if (vaultItemRepository.existsByItemIdAndSerial(item.getId(), serialNumber.trim())) {
-            throw new IllegalArgumentException(
-                "Serial " + serialNumber + " already exists for item " + itemId);
+        // item เดียวกัน bind ได้หลายกล่อง แต่ serial unique ทั้งระบบ (identity ของกล่อง)
+        if (vaultItemRepository.existsBySerial(serialNumber.trim())) {
+            throw new IllegalArgumentException("Serial already exists: " + serialNumber);
         }
 
         VaultItem vaultItem = new VaultItem();
@@ -97,9 +96,8 @@ public class VaultItemService {
                 throw new IllegalArgumentException(
                     "Cannot change serial — copy has an active booking");
             }
-            if (vaultItemRepository.existsByItemIdAndSerial(vi.getItem().getId(), serialNumber.trim())) {
-                throw new IllegalArgumentException(
-                    "Serial " + serialNumber + " already exists for item " + vi.getItem().getItemId());
+            if (vaultItemRepository.existsBySerial(serialNumber.trim())) {
+                throw new IllegalArgumentException("Serial already exists: " + serialNumber);
             }
             vi.setSerialNumber(serialNumber.trim());
         }
