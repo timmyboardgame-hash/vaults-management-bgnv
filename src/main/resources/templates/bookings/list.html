@@ -105,7 +105,13 @@
                         <th></th>
                     </tr>
                 </thead>
-                <tbody id="bookings-tbody" th:fragment="bookings-tbody">
+                <!-- auto-refresh ทุก 5s เฉพาะตอน tab active — คงค่า search/filter ปัจจุบันไว้ -->
+                <tbody id="bookings-tbody" th:fragment="bookings-tbody"
+                       hx-get="/bookings"
+                       hx-trigger="every 5s [document.visibilityState=='visible']"
+                       hx-target="#bookings-tbody"
+                       hx-swap="outerHTML"
+                       hx-include="[name='search'],[name='status']">
                     <tr th:if="${bookings.isEmpty()}" class="empty-row">
                         <td colspan="9" class="text-center">No bookings found</td>
                     </tr>
