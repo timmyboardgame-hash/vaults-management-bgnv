@@ -104,7 +104,7 @@
                                   th:classappend="'badge-' + ${item.itemStatus}">—</span>
                         </td>
                         <td th:text="${item.createdAt != null ? #temporals.format(item.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
-                        <td @click.stop style="width:90px">
+                        <td @click.stop style="width:110px; white-space:nowrap">
                             <button class="btn btn-sm btn-ghost"
                                     th:attr="data-orig-id=${item.itemId},data-item-id=${item.itemId},data-name-en=${item.itemNameEn != null ? item.itemNameEn : ''},data-name-th=${item.itemNameTh != null ? item.itemNameTh : ''},data-status=${item.itemStatus},data-game-code=${item.gameCode != null ? item.gameCode : ''},data-player-min=${item.playerCountMin != null ? item.playerCountMin : ''},data-player-max=${item.playerCountMax != null ? item.playerCountMax : ''},data-difficulty=${item.difficultyRating != null ? item.difficultyRating : ''},data-play-min=${item.playTimeMin != null ? item.playTimeMin : ''},data-play-max=${item.playTimeMax != null ? item.playTimeMax : ''},data-bgg=${item.linkBoardgamegeek != null ? item.linkBoardgamegeek : ''},data-video=${item.linkVideo != null ? item.linkVideo : ''},data-remark1=${item.remark1 != null ? item.remark1 : ''},data-default-pin=${item.defaultPin != null ? item.defaultPin : ''}"
                                     @click="ed = {...$el.dataset}; showEdit = true"

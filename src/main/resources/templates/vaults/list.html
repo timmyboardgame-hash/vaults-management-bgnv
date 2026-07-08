@@ -90,7 +90,7 @@
                                   th:classappend="'badge-' + ${vault.vaultStatus}">—</span>
                         </td>
                         <td th:text="${vault.createdAt != null ? #temporals.format(vault.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
-                        <td @click.stop style="width:90px">
+                        <td @click.stop style="width:110px; white-space:nowrap">
                             <button class="btn btn-sm btn-ghost"
                                     th:attr="data-orig-id=${vault.vaultId},data-name=${vault.vaultName != null ? vault.vaultName : ''},data-status=${vault.vaultStatus},data-description=${vault.description != null ? vault.description : ''}"
                                     @click="ed = {...$el.dataset}; showEdit = true"
