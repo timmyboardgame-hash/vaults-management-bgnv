@@ -8,7 +8,23 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('items')}"></div>
 
-    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '' }">
+    <main class="main-content" x-data="{ showCreate: false, showDelete: false, deleteId: '', showEdit: false, ed: {},
+        saveEdit() {
+            this.showEdit = false;
+            const p = new URLSearchParams({
+                newItemId: this.ed.itemId || '', itemNameEn: this.ed.nameEn || '', itemNameTh: this.ed.nameTh || '',
+                itemStatus: this.ed.status || '', gameCode: this.ed.gameCode || '',
+                playerCountMin: this.ed.playerMin || '', playerCountMax: this.ed.playerMax || '',
+                difficultyRating: this.ed.difficulty || '', playTimeMin: this.ed.playMin || '', playTimeMax: this.ed.playMax || '',
+                linkBoardgamegeek: this.ed.bgg || '', linkVideo: this.ed.video || '',
+                remark1: this.ed.remark1 || '', defaultPin: this.ed.defaultPin || ''
+            });
+            // ลบ param ว่างที่เป็นตัวเลข — Spring แปลง '' เป็น Integer ไม่ได้
+            ['playerCountMin','playerCountMax','difficultyRating','playTimeMin','playTimeMax'].forEach(k => { if (!p.get(k)) p.delete(k); });
+            fetch('/items/' + this.ed.origId, {method:'PATCH', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:p})
+                .then(r => r.ok ? window.location = '/items' : r.text().then(t => alert(t)));
+        }
+    }">
 
         <!-- Page Header -->
         <div class="page-header">
@@ -88,7 +104,13 @@
                                   th:classappend="'badge-' + ${item.itemStatus}">—</span>
                         </td>
                         <td th:text="${item.createdAt != null ? #temporals.format(item.createdAt, 'dd/MM/yyyy') : '—'}">—</td>
-                        <td @click.stop>
+                        <td @click.stop style="width:90px">
+                            <button class="btn btn-sm btn-ghost"
+                                    th:attr="data-orig-id=${item.itemId},data-item-id=${item.itemId},data-name-en=${item.itemNameEn != null ? item.itemNameEn : ''},data-name-th=${item.itemNameTh != null ? item.itemNameTh : ''},data-status=${item.itemStatus},data-game-code=${item.gameCode != null ? item.gameCode : ''},data-player-min=${item.playerCountMin != null ? item.playerCountMin : ''},data-player-max=${item.playerCountMax != null ? item.playerCountMax : ''},data-difficulty=${item.difficultyRating != null ? item.difficultyRating : ''},data-play-min=${item.playTimeMin != null ? item.playTimeMin : ''},data-play-max=${item.playTimeMax != null ? item.playTimeMax : ''},data-bgg=${item.linkBoardgamegeek != null ? item.linkBoardgamegeek : ''},data-video=${item.linkVideo != null ? item.linkVideo : ''},data-remark1=${item.remark1 != null ? item.remark1 : ''},data-default-pin=${item.defaultPin != null ? item.defaultPin : ''}"
+                                    @click="ed = {...$el.dataset}; showEdit = true"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger"
                                     @click="deleteId = [[${item.itemId}]]; showDelete = true">
                                 <i class="bi bi-trash"></i>
@@ -99,6 +121,83 @@
             </table>
         </div>
         <div class="row-count" th:text="${items.size()} + ' item(s)'"></div>
+
+        <!-- Edit Item Modal -->
+        <div class="modal-overlay" x-show="showEdit" x-cloak @click.self="showEdit = false">
+            <div class="modal-content" style="max-width:560px">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Item</h5>
+                    <button class="btn-close" @click="showEdit = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Item ID</label>
+                            <input type="text" class="form-control font-monospace" x-model="ed.itemId" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" x-model="ed.status">
+                                <option value="ENABLE">ENABLE</option>
+                                <option value="DISABLE">DISABLE</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Name EN</label>
+                            <input type="text" class="form-control" x-model="ed.nameEn" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label">Name TH</label>
+                            <input type="text" class="form-control" x-model="ed.nameTh">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Game Code</label>
+                            <input type="text" class="form-control" x-model="ed.gameCode">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Default PIN</label>
+                            <input type="text" class="form-control font-monospace" x-model="ed.defaultPin" maxlength="6">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Players Min</label>
+                            <input type="number" class="form-control" x-model="ed.playerMin">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Players Max</label>
+                            <input type="number" class="form-control" x-model="ed.playerMax">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Play Min (m)</label>
+                            <input type="number" class="form-control" x-model="ed.playMin">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Play Max (m)</label>
+                            <input type="number" class="form-control" x-model="ed.playMax">
+                        </div>
+                        <div class="col-6 col-sm-3">
+                            <label class="form-label">Difficulty</label>
+                            <input type="number" step="0.1" class="form-control" x-model="ed.difficulty">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">BoardGameGeek URL</label>
+                            <input type="text" class="form-control" x-model="ed.bgg">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Video URL</label>
+                            <input type="text" class="form-control" x-model="ed.video">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Remark 1</label>
+                            <input type="text" class="form-control" x-model="ed.remark1">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @click="showEdit = false">Cancel</button>
+                    <button class="btn btn-primary" @click="saveEdit()">Save</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Create Modal -->
         <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
