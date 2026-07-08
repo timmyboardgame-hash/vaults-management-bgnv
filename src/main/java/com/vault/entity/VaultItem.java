@@ -30,6 +30,11 @@ public class VaultItem {
     @Column(name = "rfid_tag")
     private String rfidTag;  // RFID tag ID (24 hex chars) — ส่งใน MQTT cmd/booking/create tags:[rfidTag]
 
+    // เลข barcode กล่อง — 1 row = 1 กล่องจริง; item เดียวกันมีหลายกล่องได้ (ต่าง serial)
+    // unique ต่อ item validate ที่ app layer (soft-delete aware)
+    @Column(name = "serial_number")
+    private String serialNumber;
+
     @Column(name = "status", nullable = false)
     private String status;  // ACTIVE / INACTIVE
 
@@ -60,6 +65,9 @@ public class VaultItem {
 
     public String getRfidTag() { return rfidTag; }
     public void setRfidTag(String rfidTag) { this.rfidTag = rfidTag; }
+
+    public String getSerialNumber() { return serialNumber; }
+    public void setSerialNumber(String serialNumber) { this.serialNumber = serialNumber; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

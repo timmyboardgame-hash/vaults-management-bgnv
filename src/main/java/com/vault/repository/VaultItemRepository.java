@@ -10,8 +10,16 @@ import java.util.Optional;
 
 public interface VaultItemRepository extends JpaRepository<VaultItem, String> {
 
-    @Query("SELECT vi FROM VaultItem vi JOIN FETCH vi.vault WHERE vi.item.id = :itemId AND vi.status = 'ACTIVE' AND vi.deletedAt IS NULL")
-    Optional<VaultItem> findActiveByItemId(@Param("itemId") String itemId);
+    // 1 item มีได้หลาย copy (ต่าง serial) — lookup ระดับ copy ต้องใช้ item + serial
+    @Query("SELECT vi FROM VaultItem vi JOIN FETCH vi.vault WHERE vi.item.id = :itemId " +
+           "AND vi.serialNumber = :serialNumber AND vi.status = 'ACTIVE' AND vi.deletedAt IS NULL")
+    Optional<VaultItem> findActiveByItemIdAndSerial(@Param("itemId") String itemId,
+                                                    @Param("serialNumber") String serialNumber);
+
+    @Query("SELECT COUNT(vi) > 0 FROM VaultItem vi WHERE vi.item.id = :itemId " +
+           "AND vi.serialNumber = :serialNumber AND vi.deletedAt IS NULL")
+    boolean existsByItemIdAndSerial(@Param("itemId") String itemId,
+                                    @Param("serialNumber") String serialNumber);
 
     @Query("SELECT vi FROM VaultItem vi JOIN FETCH vi.item WHERE vi.vault.vaultId = :vaultId AND vi.deletedAt IS NULL ORDER BY vi.createdAt")
     List<VaultItem> findByVaultId(@Param("vaultId") String vaultId);

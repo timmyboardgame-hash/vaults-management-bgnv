@@ -83,6 +83,7 @@ public class ItemWebController {
     @ResponseBody
     public ResponseEntity<String> update(
             @PathVariable String itemId,
+            @RequestParam(required = false) String newItemId,
             @RequestParam(required = false) String itemNameEn,
             @RequestParam(required = false) String itemNameTh,
             @RequestParam(required = false) String itemStatus,
@@ -97,11 +98,11 @@ public class ItemWebController {
             @RequestParam(required = false) String remark1,
             @RequestParam(required = false) String defaultPin) {
         try {
-            itemService.updateItem(itemId, itemNameEn, itemNameTh, itemStatus, gameCode,
+            var updated = itemService.updateItem(itemId, newItemId, itemNameEn, itemNameTh, itemStatus, gameCode,
                     playerCountMin, playerCountMax, difficultyRating,
                     playTimeMin, playTimeMax, linkBoardgamegeek, linkVideo, remark1,
                     defaultPin);
-            return ResponseEntity.ok().header("HX-Redirect", "/items/" + itemId).build();
+            return ResponseEntity.ok().header("HX-Redirect", "/items/" + updated.itemId()).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

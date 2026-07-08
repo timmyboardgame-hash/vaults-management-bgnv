@@ -224,9 +224,15 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Slot ID</label>
-                            <input type="text" name="slotId" class="form-control"
-                                   placeholder="e.g. A1, slot-1" required>
+                            <label class="form-label">Serial Number</label>
+                            <input type="text" name="serialNumber" class="form-control font-monospace"
+                                   placeholder="เลข barcode กล่อง" required>
+                            <div class="form-text">unique ต่อ item — item เดียวกันเพิ่มได้หลายกล่อง</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">RFID Tag <span class="text-muted small">(optional)</span></label>
+                            <input type="text" name="rfidTag" class="form-control font-monospace"
+                                   placeholder="e.g. 300000000000000000000001" maxlength="24">
                         </div>
                     </div>
                     <div class="modal-footer">

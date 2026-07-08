@@ -35,4 +35,9 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL " +
            "ORDER BY b.updatedAt DESC")
     List<Booking> findActiveByVaultAndItemBusinessId(@Param("vaultId") String vaultId, @Param("itemId") String itemId);
+
+    // กัน double-booking กล่องเดียวกัน (item DB id + serial) — :itemId คือ items.id (UUID) ไม่ใช่ business ID
+    @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.item.id = :itemId AND b.serialNumber = :serialNumber " +
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+    boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 }

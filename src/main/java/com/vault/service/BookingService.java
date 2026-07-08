@@ -110,8 +110,17 @@ public class BookingService {
         Item item = itemRepository.findByItemIdAndDeletedAtIsNull(req.itemId())
             .orElseThrow(() -> new IllegalArgumentException("Item not found: " + req.itemId()));
 
-        VaultItem vaultItem = vaultItemRepository.findActiveByItemId(item.getId())
-            .orElseThrow(() -> new IllegalArgumentException("Item not bound to any vault: " + req.itemId()));
+        // item เดียวกันมีหลายกล่อง (ต่าง serial) — ระบุ copy ด้วย item + serialNumber
+        String serial = req.serialNumber().trim();
+        VaultItem vaultItem = vaultItemRepository.findActiveByItemIdAndSerial(item.getId(), serial)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Item copy not found in any vault: " + req.itemId() + " serial=" + serial));
+
+        // กัน double-booking กล่องเดียวกัน
+        if (bookingRepository.existsActiveByItemAndSerial(item.getId(), serial)) {
+            throw new IllegalArgumentException(
+                "Copy already booked: " + req.itemId() + " serial=" + serial);
+        }
 
         String vaultId = vaultItem.getVault().getVaultId();
         bindingRepository.findActiveByAgentAndVault(agentId, vaultId)
@@ -138,6 +147,7 @@ public class BookingService {
             vaultItem.getRfidTag(),
             item.getItemId(),
             item.getItemNameEn(),
+            serial,
             timeStart,
             timeEnd
         );
@@ -158,7 +168,7 @@ public class BookingService {
                 ? req.bookingDate()
                 : timeStart.toLocalDate().toString());
         booking.setPin(pin);
-        booking.setSerialNumber(req.serialNumber());
+        booking.setSerialNumber(serial);
 
         Booking saved = bookingRepository.saveAndFlush(booking);
         log.info("[BOOKING] Created booking={} vault={} slot={} status=PENDING", saved.getBookingId(), vaultId, saved.getSlotId());

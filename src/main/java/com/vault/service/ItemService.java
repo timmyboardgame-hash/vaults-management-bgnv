@@ -76,7 +76,8 @@ public class ItemService {
     }
 
     @Transactional
-    public ItemResponse updateItem(String itemId, String itemNameEn, String itemNameTh,
+    public ItemResponse updateItem(String itemId, String newItemId,
+                                   String itemNameEn, String itemNameTh,
                                    String itemStatus, String gameCode,
                                    Integer playerCountMin, Integer playerCountMax,
                                    Double difficultyRating,
@@ -86,6 +87,13 @@ public class ItemService {
         log.info("[ITEM] Updating item {}", itemId);
         Item item = itemRepository.findByItemIdAndDeletedAtIsNull(itemId)
             .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        // เปลี่ยน itemId ได้ — FK อ้าง DB id (UUID) อยู่แล้ว booking/vaultItem เดิมไม่กระทบ
+        if (newItemId != null && !newItemId.isBlank() && !newItemId.equals(itemId)) {
+            if (itemRepository.existsByItemIdAndDeletedAtIsNull(newItemId)) {
+                throw new IllegalArgumentException("Item ID already exists: " + newItemId);
+            }
+            item.setItemId(newItemId);
+        }
         if (itemNameEn  != null) item.setItemNameEn(itemNameEn);
         if (itemNameTh  != null) item.setItemNameTh(itemNameTh);
         if (itemStatus  != null) item.setItemStatus(itemStatus);
