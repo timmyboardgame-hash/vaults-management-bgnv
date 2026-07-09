@@ -56,10 +56,6 @@
                               th:text="${booking.bookingTimeEnd != null ? #temporals.format(booking.bookingTimeEnd, 'HH:mm') : '—'}">—</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Slot</span>
-                        <span class="detail-value" th:text="${booking.slotId != null ? booking.slotId : '—'}">—</span>
-                    </div>
-                    <div class="detail-row">
                         <span class="detail-label">PIN</span>
                         <span class="detail-value">
                             <code th:if="${booking.pin != null}" th:text="${booking.pin}">—</code>

@@ -97,7 +97,6 @@
                         <th>Booking ID</th>
                         <th>Agent</th>
                         <th>Item</th>
-                        <th>Slot</th>
                         <th>Status</th>
                         <th>Date</th>
                         <th>Time</th>
@@ -113,7 +112,7 @@
                        hx-swap="outerHTML"
                        hx-include="[name='search'],[name='status']">
                     <tr th:if="${bookings.isEmpty()}" class="empty-row">
-                        <td colspan="9" class="text-center">No bookings found</td>
+                        <td colspan="8" class="text-center">No bookings found</td>
                     </tr>
                     <tr th:each="booking : ${bookings}"
                         class="row-link"
@@ -122,7 +121,6 @@
                         <td th:text="${booking.bookingId}">—</td>
                         <td th:text="${booking.agentName != null ? booking.agentName : booking.agentId}">—</td>
                         <td th:text="${booking.itemNameEn != null ? booking.itemNameEn : booking.itemId}">—</td>
-                        <td th:text="${booking.slotId != null ? booking.slotId : '—'}">—</td>
                         <td>
                             <span class="badge rounded-pill"
                                   th:text="${booking.bookingStatus}"
@@ -148,8 +146,8 @@
         </div>
         <div class="row-count" th:text="${bookings.size()} + ' booking(s)'"></div>
 
-        <!-- Create Booking Modal -->
-        <div class="modal-overlay" x-show="showCreate" x-cloak @click.self="showCreate = false">
+        <!-- Create Booking Modal — ปิดได้เฉพาะปุ่มกากบาท/Cancel เท่านั้น (ไม่ปิดเมื่อคลิกนอก modal) -->
+        <div class="modal-overlay" x-show="showCreate" x-cloak>
             <div class="modal-content" style="max-width:520px">
                 <div class="modal-header">
                     <h5 class="modal-title">New Booking</h5>
