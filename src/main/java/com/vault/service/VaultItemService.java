@@ -90,16 +90,18 @@ public class VaultItemService {
 
         // เปลี่ยน serial ได้เฉพาะตอนไม่มี booking ค้าง — booking เก็บ serial เป็น snapshot
         // ถ้าแก้ระหว่างลูกค้ายืมอยู่ การ validate ตอนคืนจะ mismatch
-        if (serialNumber != null && !serialNumber.isBlank()
-                && !serialNumber.trim().equals(vi.getSerialNumber())) {
-            if (bookingRepository.existsActiveByItemAndSerial(vi.getItem().getId(), vi.getSerialNumber())) {
+        // ค่าว่าง = เคลียร์ serial ออก (copy จะจองไม่ได้จนกว่าจะ set ใหม่)
+        String newSerial = serialNumber != null && !serialNumber.isBlank() ? serialNumber.trim() : null;
+        if (!java.util.Objects.equals(newSerial, vi.getSerialNumber())) {
+            if (vi.getSerialNumber() != null
+                    && bookingRepository.existsActiveByItemAndSerial(vi.getItem().getId(), vi.getSerialNumber())) {
                 throw new IllegalArgumentException(
                     "Cannot change serial — copy has an active booking");
             }
-            if (vaultItemRepository.existsBySerial(serialNumber.trim())) {
-                throw new IllegalArgumentException("Serial already exists: " + serialNumber);
+            if (newSerial != null && vaultItemRepository.existsBySerial(newSerial)) {
+                throw new IllegalArgumentException("Serial already exists: " + newSerial);
             }
-            vi.setSerialNumber(serialNumber.trim());
+            vi.setSerialNumber(newSerial);
         }
 
         vi.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
