@@ -97,7 +97,6 @@
                         <th>Booking ID</th>
                         <th>Agent</th>
                         <th>Item</th>
-                        <th>Slot</th>
                         <th>Status</th>
                         <th>Date</th>
                         <th>Time</th>
@@ -113,7 +112,7 @@
                        hx-swap="outerHTML"
                        hx-include="[name='search'],[name='status']">
                     <tr th:if="${bookings.isEmpty()}" class="empty-row">
-                        <td colspan="9" class="text-center">No bookings found</td>
+                        <td colspan="8" class="text-center">No bookings found</td>
                     </tr>
                     <tr th:each="booking : ${bookings}"
                         class="row-link"
@@ -122,7 +121,6 @@
                         <td th:text="${booking.bookingId}">—</td>
                         <td th:text="${booking.agentName != null ? booking.agentName : booking.agentId}">—</td>
                         <td th:text="${booking.itemNameEn != null ? booking.itemNameEn : booking.itemId}">—</td>
-                        <td th:text="${booking.slotId != null ? booking.slotId : '—'}">—</td>
                         <td>
                             <span class="badge rounded-pill"
                                   th:text="${booking.bookingStatus}"
