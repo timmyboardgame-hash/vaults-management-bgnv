@@ -98,7 +98,8 @@
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger"
-                                    @click="deleteId = [[${agent.agentId}]]; showDelete = true">
+                                    th:attr="data-del-id=${agent.agentId}"
+                                    @click="deleteId = $el.dataset.delId; showDelete = true">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </td>
@@ -228,7 +229,7 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary btn-sm" @click="showDelete = false">Cancel</button>
                     <button class="btn btn-danger btn-sm"
-                            @click="htmx.ajax('DELETE', '/agents/' + deleteId, {}); showDelete = false">
+                            @click="showDelete = false; fetch('/agents/' + deleteId, {method:'DELETE'}).then(() => window.location = '/agents')">
                         Delete
                     </button>
                 </div>
