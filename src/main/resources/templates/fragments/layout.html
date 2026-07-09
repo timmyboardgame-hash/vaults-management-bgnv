@@ -13,13 +13,20 @@
 <body>
 
 <header th:fragment="topbar" class="topbar">
-    <a class="topbar-brand" th:href="@{/}">
-        <div class="topbar-brand-mark">V</div>
-        <div>
-            <div class="topbar-brand-name">Vaultkeep</div>
-            <div class="topbar-brand-sub">Admin Console</div>
-        </div>
-    </a>
+    <div class="topbar-left">
+        <!-- hamburger — แสดงเฉพาะจอเล็ก เปิด/ปิด sidebar แบบ off-canvas -->
+        <button class="topbar-menu-btn" type="button" aria-label="Toggle menu"
+                onclick="document.body.classList.toggle('sidebar-open')">
+            <i class="bi bi-list"></i>
+        </button>
+        <a class="topbar-brand" th:href="@{/}">
+            <div class="topbar-brand-mark">V</div>
+            <div>
+                <div class="topbar-brand-name">Vaultkeep</div>
+                <div class="topbar-brand-sub">Admin Console</div>
+            </div>
+        </a>
+    </div>
     <div class="topbar-right">
         <form th:action="@{/logout}" method="post" style="margin:0">
             <button class="btn-ghost-sm" type="submit">
@@ -28,6 +35,8 @@
             </button>
         </form>
     </div>
+    <!-- backdrop ปิด sidebar เมื่อแตะพื้นที่นอกเมนู (จอเล็ก) -->
+    <div class="sidebar-backdrop" onclick="document.body.classList.remove('sidebar-open')"></div>
 </header>
 
 <aside th:fragment="sidebar(active)" class="sidebar">
