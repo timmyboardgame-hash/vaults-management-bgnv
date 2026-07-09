@@ -533,6 +533,10 @@ input[type="checkbox"] { accent-color: var(--vm-violet); }
     padding: 1rem 1.25rem;
     background: var(--vm-surface-2, #181c34);
     border-radius: var(--vm-radius) var(--vm-radius) 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;  /* title ซ้าย — ปุ่มกากบาทชิดขวา */
+    gap: 0.75rem;
 }
 
 .modal-title { font-size: 0.9rem; font-weight: 700; letter-spacing: -0.01em; color: var(--vm-text); }
@@ -758,9 +762,12 @@ code {
         z-index: 1030;
     }
 
+    /* จัดขอบซ้าย content ให้ตรงแนวเส้น icon ใน hamburger (ปุ่มเริ่ม 12px + icon inset ~8px) */
+    .topbar { padding: 0 0.75rem; }
     .main-content {
         margin-left: 0;
-        padding: 1.25rem 1rem 1.5rem;
+        padding: 1.25rem 1.25rem 1.5rem;
+        overflow-x: hidden;
     }
 
     /* ตารางกว้าง → scroll แนวนอนใน card แทนการล้นจอ */
@@ -785,7 +792,7 @@ code {
 }
 
 @media (max-width: 575.98px) {
-    .main-content { padding: 1rem 0.75rem 1.25rem; }
+    .main-content { padding: 1rem 1.25rem 1.25rem; }
     .page-title { font-size: 1.15rem; }
     .topbar { padding: 0 0.75rem; }
     .topbar-brand-sub { display: none; }
