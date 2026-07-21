@@ -5,6 +5,8 @@ import com.vault.service.AgentService;
 import com.vault.service.BindingService;
 import com.vault.service.VaultItemService;
 import com.vault.service.VaultService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -15,6 +17,8 @@ import java.util.List;
 @Controller
 @RequestMapping("/agents")
 public class AgentWebController {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentWebController.class);
 
     private final AgentService agentService;
     private final BindingService bindingService;
@@ -130,7 +134,9 @@ public class AgentWebController {
     public ResponseEntity<Void> delete(@PathVariable String agentId) {
         try {
             agentService.deleteAgent(agentId);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("[AGENT] Operation failed agentId={} reason={}", agentId, e.getMessage());
+        }
         return ResponseEntity.ok().header("HX-Redirect", "/agents").build();
     }
 }

@@ -32,6 +32,21 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # Tomcat access log — บันทึกทุก HTTP request (method, path, status, latency, IP)
+  # ไม่ log body/header จึงไม่รั่ว PIN / x-auth-code / x-iot-secret
+  # ไฟล์อยู่ที่ <basedir>/logs/access_log.<date>.log — rotate รายวันอัตโนมัติ
+  # basedir = working dir (.) กัน embedded Tomcat ไปเขียนลง temp dir; EC2 override ได้ด้วย TOMCAT_BASEDIR
+  tomcat:
+    basedir: ${TOMCAT_BASEDIR:.}
+    accesslog:
+      enabled: ${ACCESS_LOG_ENABLED:true}
+      directory: logs
+      prefix: access_log
+      suffix: .log
+      file-date-format: .yyyy-MM-dd
+      rotate: true
+      # %D = duration (microseconds ใน Tomcat 10)
+      pattern: '%t %a "%r" %s %b %Dus'
 
 # AWS Configuration (ใช้ IAM Role — ไม่ต้องใส่ key โดยตรง)
 aws:
@@ -53,6 +68,12 @@ api:
 iot:
   callback:
     secret: ${IOT_CALLBACK_SECRET:dev-iot-secret}
+
+# Request/Response payload logging — dev debug เท่านั้น
+# log body เต็ม (รวม PIN) แต่ mask header credential — ควรตั้ง false ใน prod
+app:
+  request-logging:
+    enabled: ${REQUEST_LOGGING_ENABLED:true}
 
 # SpringDoc / Swagger
 springdoc:
