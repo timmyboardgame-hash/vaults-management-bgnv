@@ -69,6 +69,12 @@ iot:
   callback:
     secret: ${IOT_CALLBACK_SECRET:dev-iot-secret}
 
+# Request/Response payload logging — dev debug เท่านั้น
+# log body เต็ม (รวม PIN) แต่ mask header credential — ควรตั้ง false ใน prod
+app:
+  request-logging:
+    enabled: ${REQUEST_LOGGING_ENABLED:true}
+
 # SpringDoc / Swagger
 springdoc:
   api-docs:
