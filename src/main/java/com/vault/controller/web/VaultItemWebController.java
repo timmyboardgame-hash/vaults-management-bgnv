@@ -3,6 +3,8 @@ package com.vault.controller.web;
 import com.vault.service.ItemService;
 import com.vault.service.VaultItemService;
 import com.vault.service.VaultService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -11,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 @Controller
 @RequestMapping("/vault-items")
 public class VaultItemWebController {
+
+    private static final Logger log = LoggerFactory.getLogger(VaultItemWebController.class);
 
     private final VaultItemService vaultItemService;
     private final VaultService vaultService;
@@ -69,7 +73,9 @@ public class VaultItemWebController {
     public ResponseEntity<Void> unbind(@PathVariable String vaultItemId) {
         try {
             vaultItemService.unbindItem(vaultItemId);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn("[VAULT_ITEM] Operation failed vaultItemId={} reason={}", vaultItemId, e.getMessage());
+        }
         return ResponseEntity.ok().header("HX-Redirect", "/vault-items").build();
     }
 }
