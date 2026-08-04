@@ -90,7 +90,8 @@ public class AwsIotService {
     public void publishBookingCreate(String thingName, String bookingId, String requestId,
                                      String pin, String rfidTag,
                                      String gameId, String gameTitle, String serialNumber,
-                                     LocalDateTime validFrom, LocalDateTime validUntil) {
+                                     LocalDateTime validFrom, LocalDateTime validUntil,
+                                     boolean sessionMode) {
         if (!isConfigured()) {
             log.warn("[IoT] Not configured — skipping publishBookingCreate booking={}", bookingId);
             return;
@@ -99,12 +100,14 @@ public class AwsIotService {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("booking_id", bookingId);
         payload.put("pin",        pin);
-        payload.put("tags",       List.of(rfidTag != null ? rfidTag : ""));
+        // session mode: tags ว่าง = อนุญาตทุก tag (ต้องตกลง contract กับ device)
+        payload.put("tags",       sessionMode ? List.of() : List.of(rfidTag != null ? rfidTag : ""));
         payload.put("valid_from",  validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         payload.put("game_id",    gameId);
         payload.put("game_title", gameTitle);
         payload.put("serial_number", serialNumber);  // ระบุกล่องจริง — item เดียวกันมีหลาย copy
+        payload.put("booking_mode", sessionMode ? "session" : "item");  // device เก่า ignore field นี้ได้
         payload.put("locker_id",  1);
 
         publishMqtt("vault/" + thingName + "/cmd/booking/create", requestId, payload);

@@ -40,4 +40,9 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.item.id = :itemId AND b.serialNumber = :serialNumber " +
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
+
+    // booking ที่ยังไม่จบแต่เลยเวลาสิ้นสุดแล้ว — scheduler ใช้ปิด session booking ที่หมดเวลา
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +
+           "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE') AND b.deletedAt IS NULL")
+    List<Booking> findOpenPastEnd(@Param("now") java.time.LocalDateTime now);
 }
