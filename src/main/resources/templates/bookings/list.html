@@ -84,6 +84,9 @@
                 <option value="" th:selected="${currentStatus == ''}">All Status</option>
                 <option value="PENDING"   th:selected="${currentStatus == 'PENDING'}">PENDING</option>
                 <option value="CONFIRMED" th:selected="${currentStatus == 'CONFIRMED'}">CONFIRMED</option>
+                <option value="ACTIVE"    th:selected="${currentStatus == 'ACTIVE'}">ACTIVE</option>
+                <option value="RETURNED"  th:selected="${currentStatus == 'RETURNED'}">RETURNED</option>
+                <option value="OVERDUE"   th:selected="${currentStatus == 'OVERDUE'}">OVERDUE</option>
                 <option value="FAILED"    th:selected="${currentStatus == 'FAILED'}">FAILED</option>
                 <option value="CANCELLED" th:selected="${currentStatus == 'CANCELLED'}">CANCELLED</option>
             </select>

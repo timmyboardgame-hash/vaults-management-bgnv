@@ -42,7 +42,8 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
     // booking ที่ยังไม่จบแต่เลยเวลาสิ้นสุดแล้ว — scheduler ใช้ปิด session booking ที่หมดเวลา
+    // รวม OVERDUE ด้วย: เช็คซ้ำทุกรอบเผื่อของครบแล้ว (กันเคส event คืนชิ้นสุดท้ายประมวลผลพลาด)
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +
-           "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE') AND b.deletedAt IS NULL")
+           "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE','OVERDUE') AND b.deletedAt IS NULL")
     List<Booking> findOpenPastEnd(@Param("now") java.time.LocalDateTime now);
 }

@@ -269,16 +269,29 @@ public class BookingService {
         }
 
         // Session booking: หยิบ/คืนไม่จบ booking — บันทึกเป็น movement ใน timeline แล้วคง status
-        // จบเมื่อหมดเวลา (SessionBookingScheduler) หรือ cancel เท่านั้น
+        // จบเมื่อหมดเวลา+ของครบ (scheduler / คืนชิ้นสุดท้ายตอน OVERDUE) หรือ cancel
         if (isSessionBooking(booking)
                 && ("booking_picked_up".equals(req.event()) || "booking_returned".equals(req.event()))) {
             String action = "booking_picked_up".equals(req.event()) ? "PICKED_UP" : "RETURNED";
             recordStatusEvent(booking, "MOVE:" + action, describeCopy(req.epc()));
             log.info("[IoT-EVENT] SESSION movement booking={} action={} epc={}", bookingId, action, req.epc());
+
             // tap แรกเปลี่ยน CONFIRMED → ACTIVE เพื่อให้ monitor เห็นว่า session เริ่มใช้งานแล้ว
             if ("PICKED_UP".equals(action) && "CONFIRMED".equals(booking.getBookingStatus())) {
                 booking.setBookingStatus("ACTIVE");
                 recordStatusEvent(bookingRepository.save(booking), "ACTIVE", "Session started");
+            }
+
+            // OVERDUE (หมดเวลาแล้วของค้าง) + คืนชิ้นสุดท้าย → ปิดทันที ไม่ต้องรอ scheduler
+            if ("RETURNED".equals(action) && "OVERDUE".equals(booking.getBookingStatus())) {
+                java.util.Set<String> outstanding = outstandingEpcs(
+                    bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(booking.getId()));
+                if (outstanding.isEmpty()) {
+                    booking.setBookingStatus("RETURNED");
+                    recordStatusEvent(bookingRepository.save(booking), "RETURNED",
+                        "All items returned (after time end)");
+                    log.info("[SESSION] Overdue booking={} closed — all items returned", bookingId);
+                }
             }
             return;
         }
@@ -310,6 +323,11 @@ public class BookingService {
 
     /**
      * ปิด session booking ที่เลย bookingTimeEnd — เรียกจาก SessionBookingScheduler
+     *
+     * ของครบ (ทุกกล่องที่หยิบถูกคืนแล้ว) → ปิดเป็น RETURNED
+     * ของไม่ครบ → status = OVERDUE (ยังไม่จบ — event คืนของยังบันทึกเป็น MOVE ได้
+     *             และยังบล็อค session ใหม่บนตู้เดิม) เมื่อคืนครบจึงปิดเป็น RETURNED
+     *             (ปิดทันทีตอนรับ event คืนชิ้นสุดท้าย หรือรอบ scheduler ถัดไป)
      * @return จำนวน booking ที่ถูกปิด
      */
     @Transactional
@@ -318,13 +336,45 @@ public class BookingService {
         int closed = 0;
         for (Booking b : open) {
             if (!isSessionBooking(b)) continue;  // booking ปกติเลยเวลา = late return flow เดิม ไม่ยุ่ง
-            b.setBookingStatus("RETURNED");
-            Booking saved = bookingRepository.save(b);
-            recordStatusEvent(saved, "RETURNED", "Session expired (time end reached)");
-            log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
-            closed++;
+
+            List<BookingStatusEvent> events =
+                bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(b.getId());
+            java.util.Set<String> outstanding = outstandingEpcs(events);
+
+            if (outstanding.isEmpty()) {
+                b.setBookingStatus("RETURNED");
+                Booking saved = bookingRepository.save(b);
+                recordStatusEvent(saved, "RETURNED", "Session expired — all items returned");
+                log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
+                closed++;
+            } else if (!"OVERDUE".equals(b.getBookingStatus())) {
+                b.setBookingStatus("OVERDUE");
+                Booking saved = bookingRepository.save(b);
+                recordStatusEvent(saved, "OVERDUE",
+                    "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding));
+                log.warn("[SESSION] Overdue booking={} outstanding={}", b.getBookingId(), outstanding);
+            }
         }
         return closed;
+    }
+
+    /** หา epc ของกล่องที่หยิบไปแล้วยังไม่คืน จาก movement events ใน timeline */
+    private java.util.Set<String> outstandingEpcs(List<BookingStatusEvent> events) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (BookingStatusEvent e : events) {
+            String epc = extractEpc(e.getNote());
+            if (epc == null) continue;
+            if ("MOVE:PICKED_UP".equals(e.getStatus()))      out.add(epc);
+            else if ("MOVE:RETURNED".equals(e.getStatus()))  out.remove(epc);
+        }
+        return out;
+    }
+
+    /** ดึงค่า epc จาก note รูปแบบ "... epc=XXXX" ที่ describeCopy() สร้าง */
+    private String extractEpc(String note) {
+        if (note == null) return null;
+        int i = note.lastIndexOf("epc=");
+        return i < 0 ? null : note.substring(i + 4).trim();
     }
 
     private String generatePin() {
