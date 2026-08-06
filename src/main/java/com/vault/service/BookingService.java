@@ -275,7 +275,10 @@ public class BookingService {
         if ("RETURNED".equals(current) || "CANCELLED".equals(current) || "FAILED".equals(current)) {
             log.warn("[IoT-EVENT] booking={} already terminal ({}) — ignoring late event {}",
                 bookingId, current, req.event());
-            recordStatusEvent(booking, "LATE_EVENT:" + req.event(), "ignored — booking already " + current);
+            // เก็บ epc ด้วย — เช่นคืนของหลัง admin end จะได้รู้ว่ากล่องไหนกลับมา
+            String note = "booking already " + current
+                + (req.epc() != null && !req.epc().isBlank() ? " — " + describeCopy(req.epc()) : "");
+            recordStatusEvent(booking, "LATE_EVENT:" + req.event(), note);
             return;
         }
 
