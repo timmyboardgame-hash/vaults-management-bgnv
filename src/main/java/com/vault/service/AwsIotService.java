@@ -98,20 +98,46 @@ public class AwsIotService {
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("booking_id", bookingId);
-        payload.put("pin",        pin);
-        // session mode: tags ว่าง = อนุญาตทุก tag (ต้องตกลง contract กับ device)
-        payload.put("tags",       sessionMode ? List.of() : List.of(rfidTag != null ? rfidTag : ""));
-        payload.put("valid_from",  validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-        payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
-        payload.put("game_id",    gameId);
-        payload.put("game_title", gameTitle);
-        payload.put("serial_number", serialNumber);  // ระบุกล่องจริง — item เดียวกันมีหลาย copy
-        payload.put("booking_mode", sessionMode ? "session" : "item");  // device เก่า ignore field นี้ได้
-        payload.put("locker_id",  1);
+        if (sessionMode) {
+            // Event booking ตาม device contract (feat/event-booking):
+            // required: booking_id, booking_type=event, pin, valid_until
+            // ห้ามส่ง tags / game_id / game_title — device ignore + log warning
+            payload.put("booking_id",   bookingId);
+            payload.put("booking_type", "event");
+            payload.put("pin",          pin);
+            payload.put("valid_from",   validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            payload.put("valid_until",  validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        } else {
+            // Game booking — payload เดิมทุกประการ (ไม่ใส่ booking_type = พฤติกรรมเดิมตาม contract)
+            payload.put("booking_id", bookingId);
+            payload.put("pin",        pin);
+            payload.put("tags",       List.of(rfidTag != null ? rfidTag : ""));
+            payload.put("valid_from",  validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            payload.put("game_id",    gameId);
+            payload.put("game_title", gameTitle);
+            payload.put("serial_number", serialNumber);  // ระบุกล่องจริง — item เดียวกันมีหลาย copy
+            payload.put("locker_id",  1);
+        }
 
         publishMqtt("vault/" + thingName + "/cmd/booking/create", requestId, payload);
-        log.info("[IoT] Published booking/create booking={} thing={}", bookingId, thingName);
+        log.info("[IoT] Published booking/create booking={} thing={} type={}",
+            bookingId, thingName, sessionMode ? "event" : "game");
+    }
+
+    /**
+     * Publish cmd/booking/end → จบ event booking ก่อนเวลา (ตาม device contract)
+     * Device ตัดสินเอง: ลูกค้ามือเปล่า → archive ทันที / ของยังค้าง → ตั้ง closing flag
+     * (ห้ามหยิบเพิ่ม แต่ยังรับคืนได้ archive เมื่อคืนครบ) — ตอบกลับเป็น events/booking/cancelled
+     */
+    public void publishBookingEnd(String thingName, String bookingId, String requestId) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishBookingEnd booking={}", bookingId);
+            return;
+        }
+        Map<String, Object> payload = Map.of("booking_id", bookingId);
+        publishMqtt("vault/" + thingName + "/cmd/booking/end", requestId, payload);
+        log.info("[IoT] Published booking/end booking={} thing={}", bookingId, thingName);
     }
 
     /**

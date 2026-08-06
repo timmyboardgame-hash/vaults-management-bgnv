@@ -226,18 +226,29 @@ public class BookingService {
 
         // Publish MQTT cancel ไปยัง kiosk — DB update ก่อนเสมอ ไม่รอ device ตอบ
         String requestId = UUID.randomUUID().toString();
+        boolean session = isSessionBooking(booking);
         if (booking.getVault() != null) {
-            awsIotService.publishBookingCancel(
-                booking.getVault().getVaultId(), bookingId, requestId);
+            if (session) {
+                // Event booking ใช้ cmd/booking/end ตาม device contract —
+                // device จะรับคืนของที่ค้างอยู่ต่อได้ (closing flag) แล้วค่อย archive
+                awsIotService.publishBookingEnd(
+                    booking.getVault().getVaultId(), bookingId, requestId);
+            } else {
+                awsIotService.publishBookingCancel(
+                    booking.getVault().getVaultId(), bookingId, requestId);
+            }
         } else {
             log.warn("[BOOKING] No vault on booking={} — skipping MQTT cancel", bookingId);
         }
 
         booking.setBookingStatus("CANCELLED");
-        booking.setDeletedAt(LocalDateTime.now());
+        // session: ไม่ soft-delete — เก็บ record ไว้ให้ event คืนของที่ตามมา (LATE_EVENT) ยัง trace ได้
+        if (!session) {
+            booking.setDeletedAt(LocalDateTime.now());
+        }
         Booking saved = bookingRepository.save(booking);
-        recordStatusEvent(saved, "CANCELLED", null);
-        log.info("[BOOKING] Cancelled booking={}", bookingId);
+        recordStatusEvent(saved, "CANCELLED", session ? "Session ended by admin (booking/end sent)" : null);
+        log.info("[BOOKING] Cancelled booking={} session={}", bookingId, session);
         return toResponse(saved);
     }
 
