@@ -69,6 +69,12 @@ iot:
   callback:
     secret: ${IOT_CALLBACK_SECRET:dev-iot-secret}
 
+# Session booking — itemId พิเศษ: จองช่วงเวลา หยิบ/เปลี่ยนเกมไหนก็ได้จนหมดเวลา
+# booking ที่ใช้ item เหล่านี้จะไม่จบเมื่อคืนของ (track เป็น MOVE: ใน timeline)
+# จบเมื่อหมดเวลา (scheduler ทุก 1 นาที) หรือ cancel — คั่นหลาย id ด้วย comma
+session:
+  item-ids: ${SESSION_ITEM_IDS:SESSION-PASS}
+
 # Request/Response payload logging — dev debug เท่านั้น
 # log body เต็ม (รวม PIN) แต่ mask header credential — ควรตั้ง false ใน prod
 app:

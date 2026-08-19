@@ -9,5 +9,6 @@ public record IotEventRequest(
     String result,       // success | failed | noop | null
     String error,        // error message จาก device | null
     String requestId,    // request_id_echo จาก device | null
-    String anomalyType   // booking_anomaly events only: wrong_tag | lockdown_triggered | lockdown_cleared | force_unlock | late_return
+    String anomalyType,  // booking_anomaly events only: wrong_tag | lockdown_triggered | lockdown_cleared | force_unlock | late_return
+    String epc           // RFID tag ของกล่องที่ถูกหยิบ/คืน — ใช้ track movement ใน session booking
 ) {}

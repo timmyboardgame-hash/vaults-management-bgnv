@@ -42,18 +42,29 @@ public class BookingService {
     private final BindingRepository    bindingRepository;
     private final AwsIotService        awsIotService;
 
+    // itemId พิเศษสำหรับ session booking — จองช่วงเวลา หยิบ/เปลี่ยนเกมไหนก็ได้จนหมดเวลา
+    // booking ที่ชี้ item เหล่านี้จะไม่จบเมื่อคืนของ — จบเมื่อหมดเวลา (SessionBookingScheduler) หรือ cancel
+    private final List<String> sessionItemIds;
+
     public BookingService(BookingRepository   bookingRepository,
                           BookingStatusEventRepository bookingStatusEventRepository,
                           AgentRepository     agentRepository,
                           VaultItemRepository vaultItemRepository,
                           BindingRepository   bindingRepository,
-                          AwsIotService       awsIotService) {
+                          AwsIotService       awsIotService,
+                          @org.springframework.beans.factory.annotation.Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.bookingRepository   = bookingRepository;
         this.bookingStatusEventRepository = bookingStatusEventRepository;
         this.agentRepository     = agentRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bindingRepository   = bindingRepository;
         this.awsIotService       = awsIotService;
+        this.sessionItemIds      = sessionItemIds;
+    }
+
+    /** booking นี้เป็น session booking (จองช่วงเวลา) หรือไม่ — ดูจาก itemId ที่ config ไว้ */
+    public boolean isSessionBooking(Booking booking) {
+        return booking.getItem() != null && sessionItemIds.contains(booking.getItem().getItemId());
     }
 
     /** บันทึก timeline event ของการเปลี่ยนสถานะ booking — ใช้สำหรับ booking-monitor detail page */
@@ -148,7 +159,8 @@ public class BookingService {
             item.getItemNameEn(),
             serial,
             timeStart,
-            timeEnd
+            timeEnd,
+            sessionItemIds.contains(item.getItemId())  // session → tags:[] + booking_mode=session
         );
 
         Booking booking = new Booking();
@@ -214,18 +226,29 @@ public class BookingService {
 
         // Publish MQTT cancel ไปยัง kiosk — DB update ก่อนเสมอ ไม่รอ device ตอบ
         String requestId = UUID.randomUUID().toString();
+        boolean session = isSessionBooking(booking);
         if (booking.getVault() != null) {
-            awsIotService.publishBookingCancel(
-                booking.getVault().getVaultId(), bookingId, requestId);
+            if (session) {
+                // Event booking ใช้ cmd/booking/end ตาม device contract —
+                // device จะรับคืนของที่ค้างอยู่ต่อได้ (closing flag) แล้วค่อย archive
+                awsIotService.publishBookingEnd(
+                    booking.getVault().getVaultId(), bookingId, requestId);
+            } else {
+                awsIotService.publishBookingCancel(
+                    booking.getVault().getVaultId(), bookingId, requestId);
+            }
         } else {
             log.warn("[BOOKING] No vault on booking={} — skipping MQTT cancel", bookingId);
         }
 
         booking.setBookingStatus("CANCELLED");
-        booking.setDeletedAt(LocalDateTime.now());
+        // session: ไม่ soft-delete — เก็บ record ไว้ให้ event คืนของที่ตามมา (LATE_EVENT) ยัง trace ได้
+        if (!session) {
+            booking.setDeletedAt(LocalDateTime.now());
+        }
         Booking saved = bookingRepository.save(booking);
-        recordStatusEvent(saved, "CANCELLED", null);
-        log.info("[BOOKING] Cancelled booking={}", bookingId);
+        recordStatusEvent(saved, "CANCELLED", session ? "Session ended by admin (booking/end sent)" : null);
+        log.info("[BOOKING] Cancelled booking={} session={}", bookingId, session);
         return toResponse(saved);
     }
 
@@ -247,6 +270,46 @@ public class BookingService {
             return;
         }
 
+        // booking ที่จบแล้ว (RETURNED/CANCELLED/FAILED) ห้ามถูก event ที่มาช้าเปลี่ยน status ย้อน
+        String current = booking.getBookingStatus();
+        if ("RETURNED".equals(current) || "CANCELLED".equals(current) || "FAILED".equals(current)) {
+            log.warn("[IoT-EVENT] booking={} already terminal ({}) — ignoring late event {}",
+                bookingId, current, req.event());
+            // เก็บ epc ด้วย — เช่นคืนของหลัง admin end จะได้รู้ว่ากล่องไหนกลับมา
+            String note = "booking already " + current
+                + (req.epc() != null && !req.epc().isBlank() ? " — " + describeCopy(req.epc()) : "");
+            recordStatusEvent(booking, "LATE_EVENT:" + req.event(), note);
+            return;
+        }
+
+        // Session booking: หยิบ/คืนไม่จบ booking — บันทึกเป็น movement ใน timeline แล้วคง status
+        // จบเมื่อหมดเวลา+ของครบ (scheduler / คืนชิ้นสุดท้ายตอน OVERDUE) หรือ cancel
+        if (isSessionBooking(booking)
+                && ("booking_picked_up".equals(req.event()) || "booking_returned".equals(req.event()))) {
+            String action = "booking_picked_up".equals(req.event()) ? "PICKED_UP" : "RETURNED";
+            recordStatusEvent(booking, "MOVE:" + action, describeCopy(req.epc()));
+            log.info("[IoT-EVENT] SESSION movement booking={} action={} epc={}", bookingId, action, req.epc());
+
+            // tap แรกเปลี่ยน CONFIRMED → ACTIVE เพื่อให้ monitor เห็นว่า session เริ่มใช้งานแล้ว
+            if ("PICKED_UP".equals(action) && "CONFIRMED".equals(booking.getBookingStatus())) {
+                booking.setBookingStatus("ACTIVE");
+                recordStatusEvent(bookingRepository.save(booking), "ACTIVE", "Session started");
+            }
+
+            // OVERDUE (หมดเวลาแล้วของค้าง) + คืนชิ้นสุดท้าย → ปิดทันที ไม่ต้องรอ scheduler
+            if ("RETURNED".equals(action) && "OVERDUE".equals(booking.getBookingStatus())) {
+                java.util.Set<String> outstanding = outstandingEpcs(
+                    bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(booking.getId()));
+                if (outstanding.isEmpty()) {
+                    booking.setBookingStatus("RETURNED");
+                    recordStatusEvent(bookingRepository.save(booking), "RETURNED",
+                        "All items returned (after time end)");
+                    log.info("[SESSION] Overdue booking={} closed — all items returned", bookingId);
+                }
+            }
+            return;
+        }
+
         String newStatus = switch (req.event()) {
             case "booking_created"   -> "success".equals(req.result()) ? "CONFIRMED" : "FAILED";
             case "booking_picked_up" -> "ACTIVE";
@@ -262,6 +325,70 @@ public class BookingService {
             Booking saved = bookingRepository.save(booking);
             recordStatusEvent(saved, newStatus, req.error());
         }
+    }
+
+    /** แปลง epc → คำอธิบายกล่อง "Catan (SN-001) epc=E280..." สำหรับ movement note */
+    private String describeCopy(String epc) {
+        if (epc == null || epc.isBlank()) return "unknown tag";
+        return vaultItemRepository.findActiveByRfidTag(epc)
+            .map(vi -> vi.getItem().getItemNameEn() + " (" + vi.getSerialNumber() + ") epc=" + epc)
+            .orElse("unregistered tag epc=" + epc);
+    }
+
+    /**
+     * ปิด session booking ที่เลย bookingTimeEnd — เรียกจาก SessionBookingScheduler
+     *
+     * ของครบ (ทุกกล่องที่หยิบถูกคืนแล้ว) → ปิดเป็น RETURNED
+     * ของไม่ครบ → status = OVERDUE (ยังไม่จบ — event คืนของยังบันทึกเป็น MOVE ได้
+     *             และยังบล็อค session ใหม่บนตู้เดิม) เมื่อคืนครบจึงปิดเป็น RETURNED
+     *             (ปิดทันทีตอนรับ event คืนชิ้นสุดท้าย หรือรอบ scheduler ถัดไป)
+     * @return จำนวน booking ที่ถูกปิด
+     */
+    @Transactional
+    public int closeExpiredSessionBookings() {
+        List<Booking> open = bookingRepository.findOpenPastEnd(LocalDateTime.now());
+        int closed = 0;
+        for (Booking b : open) {
+            if (!isSessionBooking(b)) continue;  // booking ปกติเลยเวลา = late return flow เดิม ไม่ยุ่ง
+
+            List<BookingStatusEvent> events =
+                bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(b.getId());
+            java.util.Set<String> outstanding = outstandingEpcs(events);
+
+            if (outstanding.isEmpty()) {
+                b.setBookingStatus("RETURNED");
+                Booking saved = bookingRepository.save(b);
+                recordStatusEvent(saved, "RETURNED", "Session expired — all items returned");
+                log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
+                closed++;
+            } else if (!"OVERDUE".equals(b.getBookingStatus())) {
+                b.setBookingStatus("OVERDUE");
+                Booking saved = bookingRepository.save(b);
+                recordStatusEvent(saved, "OVERDUE",
+                    "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding));
+                log.warn("[SESSION] Overdue booking={} outstanding={}", b.getBookingId(), outstanding);
+            }
+        }
+        return closed;
+    }
+
+    /** หา epc ของกล่องที่หยิบไปแล้วยังไม่คืน จาก movement events ใน timeline */
+    private java.util.Set<String> outstandingEpcs(List<BookingStatusEvent> events) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (BookingStatusEvent e : events) {
+            String epc = extractEpc(e.getNote());
+            if (epc == null) continue;
+            if ("MOVE:PICKED_UP".equals(e.getStatus()))      out.add(epc);
+            else if ("MOVE:RETURNED".equals(e.getStatus()))  out.remove(epc);
+        }
+        return out;
+    }
+
+    /** ดึงค่า epc จาก note รูปแบบ "... epc=XXXX" ที่ describeCopy() สร้าง */
+    private String extractEpc(String note) {
+        if (note == null) return null;
+        int i = note.lastIndexOf("epc=");
+        return i < 0 ? null : note.substring(i + 4).trim();
     }
 
     private String generatePin() {

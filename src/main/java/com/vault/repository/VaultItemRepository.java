@@ -24,4 +24,9 @@ public interface VaultItemRepository extends JpaRepository<VaultItem, String> {
 
     @Query("SELECT vi FROM VaultItem vi JOIN FETCH vi.vault JOIN FETCH vi.item WHERE vi.deletedAt IS NULL AND vi.status = 'ACTIVE'")
     List<VaultItem> findAllActive();
+
+    // lookup copy จาก RFID tag (epc ใน IoT event) — ใช้ track ว่ากล่องไหนถูกหยิบ/คืนใน session booking
+    @Query("SELECT vi FROM VaultItem vi JOIN FETCH vi.item " +
+           "WHERE vi.rfidTag = :rfidTag AND vi.status = 'ACTIVE' AND vi.deletedAt IS NULL")
+    Optional<VaultItem> findActiveByRfidTag(@Param("rfidTag") String rfidTag);
 }
