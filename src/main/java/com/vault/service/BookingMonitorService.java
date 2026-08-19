@@ -28,14 +28,19 @@ public class BookingMonitorService {
     private final BookingRepository bookingRepository;
     private final BookingStatusEventRepository bookingStatusEventRepository;
 
+    // itemId ที่เป็น session pass — แยกออกจาก grid กล่องเกม แสดงเป็นการ์ดของตัวเอง
+    private final List<String> sessionItemIds;
+
     public BookingMonitorService(VaultRepository vaultRepository,
                                  VaultItemRepository vaultItemRepository,
                                  BookingRepository bookingRepository,
-                                 BookingStatusEventRepository bookingStatusEventRepository) {
+                                 BookingStatusEventRepository bookingStatusEventRepository,
+                                 @org.springframework.beans.factory.annotation.Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.vaultRepository = vaultRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bookingRepository = bookingRepository;
         this.bookingStatusEventRepository = bookingStatusEventRepository;
+        this.sessionItemIds = sessionItemIds;
     }
 
     /** Grid view — ทุก vault พร้อม slot (VaultItem) และ current booking ของแต่ละ slot */
@@ -45,29 +50,41 @@ public class BookingMonitorService {
         return vaults.stream().map(vault -> {
             List<VaultItem> vaultItems = vaultItemRepository.findByVaultId(vault.getVaultId());
 
-            List<MonitorSlot> slots = vaultItems.stream().map(vi -> {
-                List<Booking> active = bookingRepository.findActiveByVaultAndItemBusinessId(
-                        vault.getVaultId(), vi.getItem().getItemId());
-                Booking current = active.isEmpty() ? null : active.get(0);
+            List<MonitorSlot> gameSlots = vaultItems.stream()
+                    .filter(vi -> !sessionItemIds.contains(vi.getItem().getItemId()))
+                    .map(vi -> toSlot(vault, vi))
+                    .toList();
 
-                return new MonitorSlot(
-                        vi.getSlotId(),
-                        vi.getItem().getItemId(),
-                        vi.getItem().getItemNameEn(),
-                        current != null,
-                        current != null ? current.getBookingId() : null,
-                        current != null ? current.getBookingStatus() : null
-                );
-            }).toList();
+            // session pass ของตู้นี้ (ถ้ามี) — แสดงเป็นการ์ดแยก ไม่ปนกับกล่องเกม
+            MonitorSlot sessionSlot = vaultItems.stream()
+                    .filter(vi -> sessionItemIds.contains(vi.getItem().getItemId()))
+                    .findFirst()
+                    .map(vi -> toSlot(vault, vi))
+                    .orElse(null);
 
             return new MonitorVault(
                     vault.getVaultId(),
                     vault.getVaultName(),
                     "ENABLE".equals(vault.getVaultStatus()),
                     vault.getVaultSlot(),
-                    slots
+                    gameSlots,
+                    sessionSlot
             );
         }).toList();
+    }
+
+    private MonitorSlot toSlot(Vault vault, VaultItem vi) {
+        List<Booking> active = bookingRepository.findActiveByVaultAndItemBusinessId(
+                vault.getVaultId(), vi.getItem().getItemId());
+        Booking current = active.isEmpty() ? null : active.get(0);
+        return new MonitorSlot(
+                vi.getSlotId(),
+                vi.getItem().getItemId(),
+                vi.getItem().getItemNameEn(),
+                current != null,
+                current != null ? current.getBookingId() : null,
+                current != null ? current.getBookingStatus() : null
+        );
     }
 
     /** Detail view — current booking + history (พร้อม timeline) ของ vault+item ที่ระบุ */

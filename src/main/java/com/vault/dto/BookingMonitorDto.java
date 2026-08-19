@@ -19,7 +19,8 @@ public class BookingMonitorDto {
         String vaultName,
         boolean online,
         Integer totalSlots,
-        List<MonitorSlot> slots
+        List<MonitorSlot> slots,      // เฉพาะกล่องเกมจริง — ไม่รวม session pass
+        MonitorSlot sessionSlot       // session pass ของตู้นี้ (null ถ้ายังไม่ได้ bind)
     ) {}
 
     public record StatusEventDto(

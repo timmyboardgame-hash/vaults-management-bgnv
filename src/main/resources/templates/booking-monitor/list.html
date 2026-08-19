@@ -38,6 +38,28 @@
                       th:classappend="${vault.online} ? 'badge-ONLINE' : 'badge-OFFLINE'">—</span>
             </div>
 
+            <!-- Session Pass — การ์ดแยกเต็มความกว้าง ไม่ปนกับกริดกล่องเกม -->
+            <div th:if="${vault.sessionSlot != null}"
+                 class="bm-session"
+                 th:classappend="${vault.sessionSlot.occupied} ? 'bm-session--' + ${vault.sessionSlot.currentStatus} : 'bm-session--empty'"
+                 th:attr="data-href='/booking-monitor/' + ${vault.vaultId} + '/' + ${vault.sessionSlot.itemId}"
+                 onclick="window.location.href=this.dataset.href">
+                <div class="bm-session-left">
+                    <i class="bi bi-hourglass-split bm-session-icon"></i>
+                    <div>
+                        <div class="bm-session-label">Event Booking — เหมาช่วงเวลา</div>
+                        <div class="bm-session-sub"
+                             th:text="${vault.sessionSlot.occupied}
+                                      ? 'กำลังใช้งาน · ' + ${vault.sessionSlot.currentBookingId}
+                                      : 'ยังไม่มีการจอง — หยิบเกมไหนก็ได้ในช่วงที่จอง'">—</div>
+                    </div>
+                </div>
+                <span th:if="${vault.sessionSlot.occupied}" class="badge rounded-pill"
+                      th:text="${vault.sessionSlot.currentStatus}"
+                      th:classappend="'badge-' + ${vault.sessionSlot.currentStatus}">—</span>
+                <span th:unless="${vault.sessionSlot.occupied}" class="badge rounded-pill badge-IDLE">ว่าง</span>
+            </div>
+
             <div th:if="${vault.slots.isEmpty()}" class="text-muted" style="font-size:0.85rem;">
                 ยังไม่มี item ผูกกับ vault นี้
             </div>
