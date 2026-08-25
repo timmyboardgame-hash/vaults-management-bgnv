@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Vault Board')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('booking-monitor')}"></div>
+
+    <main class="main-content" x-data="{ sheet: null }">
+
+        <div class="page-header">
+            <div>
+                <a href="/booking-monitor" class="btn btn-sm btn-ghost mb-2">
+                    <i class="bi bi-arrow-left me-1"></i>ทุก vault
+                </a>
+                <h1 class="page-title">
+                    <span th:text="${b.vaultName}">vault</span> — booking &amp; การใช้งาน
+                </h1>
+                <p class="page-subtitle">
+                    Thing <code th:text="${b.vaultId}">vt-001</code> ·
+                    <span th:text="${b.itemsTotal}">0</span> กล่องในตู้ · รีเฟรชทุก 5 วินาที
+                </p>
+            </div>
+            <span class="badge rounded-pill"
+                  th:text="${b.online} ? 'ONLINE' : 'OFFLINE'"
+                  th:classappend="${b.online} ? 'badge-ONLINE' : 'badge-OFFLINE'">—</span>
+        </div>
+
+        <!-- auto-refresh ทุก 5s เฉพาะตอน tab active -->
+        <div id="board-body" th:fragment="board-body"
+             th:attr="hx-get='/booking-monitor/' + ${b.vaultId}"
+             hx-trigger="every 5s [document.visibilityState=='visible']"
+             hx-target="#board-body"
+             hx-swap="outerHTML">
+
+            <!-- สรุป -->
+            <div class="vb-summary">
+                <div class="vb-tile">
+                    <div class="vb-tile-k">Booking ที่ยังไม่จบ</div>
+                    <div class="vb-tile-v vb-busy" th:text="${b.openBookings}">0</div>
+                    <div class="vb-tile-n">
+                        ⏳ <span th:text="${b.openEvents}">0</span> event ·
+                        <span th:text="${b.openGames}">0</span> รายกล่อง
+                    </div>
+                </div>
+                <div class="vb-tile">
+                    <div class="vb-tile-k">ต้องดูด่วน</div>
+                    <div class="vb-tile-v" th:classappend="${b.attentionCount > 0} ? 'vb-over' : 'vb-ok'"
+                         th:text="${b.attentionCount}">0</div>
+                    <div class="vb-tile-n" th:text="${b.attentionNote}">—</div>
+                </div>
+                <div class="vb-tile">
+                    <div class="vb-tile-k">กล่องที่ถูกหยิบออก</div>
+                    <div class="vb-tile-v vb-vio">
+                        <span th:text="${b.itemsOut}">0</span><span class="vb-of"> / <span th:text="${b.itemsTotal}">0</span></span>
+                    </div>
+                    <div class="vb-tile-n">ใช้งาน <span th:text="${b.utilisationPct}">0</span>% ของตู้</div>
+                </div>
+                <div class="vb-tile">
+                    <div class="vb-tile-k">จบแล้ววันนี้</div>
+                    <div class="vb-tile-v vb-ok" th:text="${b.doneToday}">0</div>
+                    <div class="vb-tile-n">
+                        <span th:if="${b.avgMinutesToday > 0}">ยืมเฉลี่ย <span th:text="${b.avgMinutesToday}">0</span> นาที</span>
+                        <span th:unless="${b.avgMinutesToday > 0}">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vb-cols">
+
+                <!-- ══ มุมมองที่ 1: booking ══ -->
+                <section>
+                    <div class="vb-sec">
+                        <h2>Booking ของตู้นี้
+                            <span class="vb-cnt" th:text="${b.active.size() + b.done.size()}">0</span></h2>
+                        <span class="vb-hint">คลิกเพื่อดู history</span>
+                    </div>
+
+                    <div class="vb-group">กำลังใช้งาน (<span th:text="${b.active.size()}">0</span>)</div>
+                    <div th:if="${b.active.isEmpty()}" class="vb-empty">ไม่มี booking ที่ใช้งานอยู่</div>
+                    <th:block th:each="bk : ${b.active}">
+                        <div th:replace="~{booking-monitor/board-parts :: bkRow(${bk}, false)}"></div>
+                    </th:block>
+
+                    <div class="vb-group">จบแล้ววันนี้ (<span th:text="${b.done.size()}">0</span>)</div>
+                    <div th:if="${b.done.isEmpty()}" class="vb-empty">ยังไม่มี booking ที่จบวันนี้</div>
+                    <th:block th:each="bk : ${b.done}">
+                        <div th:replace="~{booking-monitor/board-parts :: bkRow(${bk}, true)}"></div>
+                    </th:block>
+                </section>
+
+                <!-- ══ มุมมองที่ 2: กล่องในตู้ ══ -->
+                <section>
+                    <div class="vb-sec">
+                        <h2>กล่องในตู้ <span class="vb-cnt" th:text="${b.itemsTotal}">0</span></h2>
+                        <span class="vb-hint">เรียงตามที่ออกไปนานสุด</span>
+                    </div>
+
+                    <div th:if="${b.items.isEmpty()}" class="vb-empty">ยังไม่มี item ผูกกับ vault นี้</div>
+
+                    <div class="vb-grid">
+                        <div th:each="it : ${b.items}"
+                             class="vb-card"
+                             th:classappend="(${it.session} ? ' vb-card--session' : '')
+                                           + (${it.over} ? ' vb-card--over' : (${it.out} ? ' vb-card--out' : ' vb-card--in'))"
+                             th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')}"
+                             th:with="link=${it.heldBy != null ? it.heldBy : it.reservedBy}"
+                             th:attrappend="data-open=${link}"
+                             @click="if ($el.dataset.open) sheet = $el.dataset.open"
+                             th:style="${link != null} ? 'cursor:pointer' : ''">
+                            <div>
+                                <div class="vb-card-name">
+                                    <span th:if="${it.session}">⏳ </span><span th:text="${it.itemName}">Item</span>
+                                </div>
+                                <div class="vb-card-sn" th:text="${it.serialNumber != null ? it.serialNumber : '— ยังไม่ตั้ง serial'}">—</div>
+                            </div>
+
+                            <div class="vb-card-row">
+                                <span class="vb-card-time" th:if="${it.out}"
+                                      th:text="${it.minutesOut >= 60}
+                                               ? ${it.minutesOut / 60} + ' ชม. ' + ${it.minutesOut % 60} + ' น.'
+                                               : ${it.minutesOut} + ' นาที'">—</span>
+                                <span class="vb-card-time vb-in" th:unless="${it.out}"
+                                      th:text="${it.session} ? 'พร้อมเปิดรอบ' : 'อยู่ในตู้'">อยู่ในตู้</span>
+                                <span class="vb-card-flag" th:if="${it.over}">เกินเวลา</span>
+                            </div>
+
+                            <div class="vb-meter">
+                                <span th:style="'width:' + ${it.out and it.limitMinutes > 0
+                                        ? (it.minutesOut * 100 / it.limitMinutes > 100 ? 100 : it.minutesOut * 100 / it.limitMinutes)
+                                        : 100} + '%; background:' + (${it.over} ? '#fb923c' : (${it.out} ? '#fbbf24' : 'rgba(74,222,128,.45)'))"></span>
+                            </div>
+
+                            <div class="vb-card-by">
+                                <span th:if="${it.heldBy != null}"
+                                      th:text="(${#strings.startsWith(it.heldBy,'EV')} ? '⏳ ' : '') + ${it.heldBy}">—</span>
+                                <span th:if="${it.heldBy == null and it.reservedBy != null}"
+                                      th:text="'จองไว้ · ' + ${it.reservedBy}">—</span>
+                                <span th:if="${it.heldBy == null and it.reservedBy == null}" class="vb-dim">
+                                    <span th:if="${it.session}">ยังไม่มี event booking</span>
+                                    <span th:unless="${it.session}">ว่าง พร้อมให้ยืม</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- ══ Drill-down: history ของ booking ══ -->
+        <th:block th:each="bk : ${b.active}">
+            <div th:replace="~{booking-monitor/board-parts :: bkSheet(${bk})}"></div>
+        </th:block>
+        <th:block th:each="bk : ${b.done}">
+            <div th:replace="~{booking-monitor/board-parts :: bkSheet(${bk})}"></div>
+        </th:block>
+
+    </main>
+</div>
+
+</body>
+</html>

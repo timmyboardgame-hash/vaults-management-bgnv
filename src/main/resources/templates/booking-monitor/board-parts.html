@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+
+<!-- ─── fragment: booking row ─────────────────────────────────────────────── -->
+<div th:fragment="bkRow(bk, done)"
+     class="vb-bk"
+     th:classappend="'vb-bk--' + ${bk.status} + (${done} ? ' vb-bk--done' : '')"
+     th:attr="data-booking=${bk.bookingId},data-open=${bk.bookingId}"
+     @click="sheet = $el.dataset.open"
+     tabindex="0" role="button"
+     th:aria-label="'ดู history ของ ' + ${bk.bookingId}">
+    <div class="vb-bk-ic" th:classappend="${bk.type == 'event'} ? ' vb-bk-ic--ev' : ''"
+         th:text="${bk.type == 'event'} ? '⏳' : '🎲'">🎲</div>
+    <div class="vb-bk-main">
+        <div class="vb-bk-id">
+            <span th:text="${bk.bookingId}">BK-000</span>
+            <span class="vb-tag" th:classappend="${bk.type == 'event'} ? ' vb-tag--ev' : ''"
+                  th:text="${bk.type == 'event'} ? 'event' : 'รายกล่อง'">—</span>
+        </div>
+        <div class="vb-bk-meta">
+            <span th:text="${bk.agentName}">agent</span> ·
+            <span th:text="${bk.timeStart != null ? #temporals.format(bk.timeStart, 'HH:mm') : '—'}">—</span>–<span
+                  th:text="${bk.timeEnd != null ? #temporals.format(bk.timeEnd, 'HH:mm') : '—'}">—</span> น.
+        </div>
+        <div class="vb-bk-stat">
+            <span th:if="${bk.type == 'event'}">
+                <b th:text="${bk.cycleCount}">0</b> รอบที่หยิบ
+            </span>
+            <span th:if="${bk.holdingCount > 0}">ถืออยู่ <b th:text="${bk.holdingCount}">0</b> กล่อง</span>
+            <span th:if="${bk.totalMinutes > 0}">ยืมรวม <b th:text="${bk.totalMinutes}">0</b> นาที</span>
+            <span th:if="${bk.cycleCount == 0 and bk.holdingCount == 0}" class="vb-dim">ยังไม่มีการหยิบ</span>
+        </div>
+    </div>
+    <div class="vb-bk-r">
+        <div th:if="${!done and bk.minutesLeft >= 0}">
+            <div class="vb-bk-clock" th:text="${bk.minutesLeft >= 60}
+                    ? ${bk.minutesLeft / 60} + ' ชม. ' + ${bk.minutesLeft % 60} + ' น.'
+                    : ${bk.minutesLeft} + ' นาที'">—</div>
+            <div class="vb-bk-clock-k">เหลืออีก</div>
+        </div>
+        <div th:if="${!done and bk.minutesLeft < 0}">
+            <div class="vb-bk-clock vb-over" th:text="${-bk.minutesLeft >= 60}
+                    ? ${-bk.minutesLeft / 60} + ' ชม. ' + ${-bk.minutesLeft % 60} + ' น.'
+                    : ${-bk.minutesLeft} + ' นาที'">—</div>
+            <div class="vb-bk-clock-k">เลยเวลามา</div>
+        </div>
+        <span class="badge rounded-pill" th:text="${bk.status}"
+              th:classappend="'badge-' + ${bk.status}">—</span>
+    </div>
+</div>
+
+<!-- ─── fragment: history sheet ───────────────────────────────────────────── -->
+<div th:fragment="bkSheet(bk)" class="modal-overlay"
+     th:attr="data-sheet=${bk.bookingId}"
+     x-data="{ myId: '' }" x-init="myId = $el.dataset.sheet"
+     x-show="sheet === myId" x-cloak
+     @click.self="sheet = null">
+    <div class="modal-content" style="max-width:640px">
+        <div class="modal-header">
+            <div>
+                <h5 class="modal-title">
+                    <span th:text="${bk.bookingId}">BK-000</span>
+                    <span class="badge rounded-pill ms-1" th:text="${bk.status}"
+                          th:classappend="'badge-' + ${bk.status}">—</span>
+                </h5>
+                <div class="vb-sheet-meta">
+                    <span th:text="${bk.type == 'event'} ? '⏳ Event Booking — เหมาช่วงเวลา' : '🎲 จองรายกล่อง'">—</span> ·
+                    <span th:text="${bk.agentName}">agent</span> ·
+                    <span th:text="${bk.timeStart != null ? #temporals.format(bk.timeStart, 'dd/MM HH:mm') : '—'}">—</span>–<span
+                          th:text="${bk.timeEnd != null ? #temporals.format(bk.timeEnd, 'HH:mm') : '—'}">—</span> น.
+                    <span th:if="${bk.pin != null}"> · PIN <code th:text="${bk.pin}">—</code></span>
+                </div>
+            </div>
+            <button class="btn-close" @click="sheet = null"></button>
+        </div>
+
+        <div class="modal-body">
+            <div class="vb-kpis">
+                <div class="vb-kpi">
+                    <div class="v" th:text="${bk.cycleCount}">0</div>
+                    <div class="k" th:text="${bk.type == 'event'} ? 'รอบที่หยิบ' : 'กล่องที่จอง'">—</div>
+                </div>
+                <div class="vb-kpi">
+                    <div class="v" th:text="${bk.totalMinutes} + ' นาที'">0</div>
+                    <div class="k">เวลายืมรวม</div>
+                </div>
+                <div class="vb-kpi">
+                    <div class="v" th:text="${bk.holdingCount}">0</div>
+                    <div class="k">ถืออยู่ตอนนี้</div>
+                </div>
+            </div>
+
+            <div class="vb-sub">
+                <span th:if="${bk.type == 'event'}">รอบการหยิบ-คืน (<span th:text="${bk.cycles.size()}">0</span>)</span>
+                <span th:unless="${bk.type == 'event'}">กล่องที่จอง</span>
+            </div>
+            <div class="vb-cycles">
+                <div th:if="${bk.cycles.isEmpty()}" class="vb-empty">ยังไม่มีการหยิบกล่อง</div>
+                <div th:each="c, st : ${bk.cycles}" class="vb-cyc"
+                     th:classappend="${c.late} ? ' vb-cyc--late' : (${c.returnedAt == null and !c.pending} ? ' vb-cyc--open' : '')">
+                    <div class="vb-cyc-n" th:text="${st.count}">1</div>
+                    <div>
+                        <div class="vb-cyc-g" th:text="${c.itemName}">Item</div>
+                        <div class="vb-cyc-t">
+                            <span th:if="${c.pending}">ยังไม่ถูกหยิบ</span>
+                            <span th:unless="${c.pending}">
+                                <span th:text="${c.pickedUpAt != null ? #temporals.format(c.pickedUpAt, 'HH:mm') : '—'}">—</span> →
+                                <span th:text="${c.returnedAt != null ? #temporals.format(c.returnedAt, 'HH:mm') : 'ยังไม่คืน'}">—</span>
+                            </span>
+                            · <span th:text="${c.serialNumber != null ? c.serialNumber : '—'}">—</span>
+                        </div>
+                    </div>
+                    <div class="vb-cyc-d">
+                        <span th:if="${c.pending}">—</span>
+                        <span th:unless="${c.pending}"
+                              th:text="${c.minutes} + ' นาที' + (${c.late} ? ' ⚠' : '')">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vb-sub">Timeline ที่ระบบบันทึก (booking_status_events)</div>
+            <div class="vb-raw">
+                <div th:each="e : ${bk.timeline}">
+                    <span class="ts" th:text="${#temporals.format(e.occurredAt, 'HH:mm:ss')}">--:--:--</span>
+                    <span class="k"
+                          th:classappend="${#strings.startsWith(e.status,'MOVE')} ? ' mv'
+                                        : (${#strings.startsWith(e.status,'ANOMALY') or e.status == 'OVERDUE'} ? ' warn'
+                                        : (${e.status == 'CANCELLED' or #strings.startsWith(e.status,'LATE_EVENT')} ? ' off' : ''))"
+                          th:text="${e.status}">STATUS</span>
+                    <span th:text="${e.note != null ? e.note : ''}"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
