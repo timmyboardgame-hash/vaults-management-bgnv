@@ -947,3 +947,8 @@ code {
     .vb-summary { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 575.98px) { .vb-summary { grid-template-columns: 1fr; } }
+
+/* ─── Booking Monitor — vault cards 2 คอลัมน์บนจอกว้าง ───────── */
+.bm-vault-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.bm-vault-grid > .bm-vault-wide { grid-column: 1 / -1; }
+@media (max-width: 1199.98px) { .bm-vault-grid { grid-template-columns: 1fr; } }

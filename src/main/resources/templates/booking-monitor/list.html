@@ -17,17 +17,17 @@
         </div>
 
         <!-- auto-refresh ทุก 5s เฉพาะตอน tab active -->
-        <div id="bm-grid" th:fragment="bm-grid"
+        <div id="bm-grid" th:fragment="bm-grid" class="bm-vault-grid"
              hx-get="/booking-monitor"
              hx-trigger="every 5s [document.visibilityState=='visible']"
              hx-target="#bm-grid"
              hx-swap="outerHTML">
 
-        <div th:if="${vaults.isEmpty()}" class="detail-card">
+        <div th:if="${vaults.isEmpty()}" class="detail-card bm-vault-wide">
             <p class="text-muted mb-0">No vaults found</p>
         </div>
 
-        <div th:each="vault : ${vaults}" class="detail-card" style="margin-bottom: 1rem;">
+        <div th:each="vault : ${vaults}" class="detail-card">
             <div class="detail-card-title" style="display:flex; align-items:center; justify-content:space-between;">
                 <span>
                     <i class="bi bi-safe2-fill me-2"></i>
