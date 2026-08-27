@@ -952,3 +952,7 @@ code {
 .bm-vault-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 .bm-vault-grid > .bm-vault-wide { grid-column: 1 / -1; }
 @media (max-width: 1199.98px) { .bm-vault-grid { grid-template-columns: 1fr; } }
+
+/* ป้าย booking บนการ์ดกล่อง — คลิกแยกจากตัวการ์ด (การ์ด = ประวัติกล่อง, ป้าย = ประวัติ booking) */
+.vb-card-bklink { color: var(--vm-text-2); cursor: pointer; border-bottom: 1px dashed var(--vm-border-2); }
+.vb-card-bklink:hover { color: #a78bfa; border-bottom-color: #a78bfa; }

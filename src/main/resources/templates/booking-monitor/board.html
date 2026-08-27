@@ -101,15 +101,17 @@
                     <div th:if="${b.items.isEmpty()}" class="vb-empty">ยังไม่มี item ผูกกับ vault นี้</div>
 
                     <div class="vb-grid">
+                        <!-- คลิกที่การ์ด = ประวัติของกล่องใบนี้ · คลิกที่ป้าย booking ด้านล่าง = ประวัติของ booking -->
                         <div th:each="it : ${b.items}"
                              class="vb-card"
                              th:classappend="(${it.session} ? ' vb-card--session' : '')
                                            + (${it.over} ? ' vb-card--over' : (${it.out} ? ' vb-card--out' : ' vb-card--in'))"
-                             th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')}"
-                             th:with="link=${it.heldBy != null ? it.heldBy : it.reservedBy}"
-                             th:attrappend="data-open=${link}"
-                             @click="if ($el.dataset.open) sheet = $el.dataset.open"
-                             th:style="${link != null} ? 'cursor:pointer' : ''">
+                             th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')},
+                                      data-href='/booking-monitor/' + ${b.vaultId} + '/' + ${it.itemId}"
+                             onclick="window.location.href=this.dataset.href"
+                             tabindex="0" role="button"
+                             th:aria-label="'ประวัติของกล่อง ' + ${it.itemName}"
+                             style="cursor:pointer">
                             <div>
                                 <div class="vb-card-name">
                                     <span th:if="${it.session}">⏳ </span><span th:text="${it.itemName}">Item</span>
@@ -134,10 +136,15 @@
                             </div>
 
                             <div class="vb-card-by">
-                                <span th:if="${it.heldBy != null}"
-                                      th:text="(${#strings.startsWith(it.heldBy,'EV')} ? '⏳ ' : '') + ${it.heldBy}">—</span>
-                                <span th:if="${it.heldBy == null and it.reservedBy != null}"
-                                      th:text="'จองไว้ · ' + ${it.reservedBy}">—</span>
+                                <!-- @click.stop กัน bubble ไป onclick ของการ์ด (ที่พาไปหน้าประวัติกล่อง) -->
+                                <span th:if="${it.heldBy != null}" class="vb-card-bklink"
+                                      th:attr="data-open=${it.heldBy}"
+                                      @click.stop="sheet = $el.dataset.open"
+                                      th:text="(${#strings.startsWith(it.heldBy,'EV')} ? '⏳ ' : '') + ${it.heldBy} + ' ›'">—</span>
+                                <span th:if="${it.heldBy == null and it.reservedBy != null}" class="vb-card-bklink"
+                                      th:attr="data-open=${it.reservedBy}"
+                                      @click.stop="sheet = $el.dataset.open"
+                                      th:text="'จองไว้ · ' + ${it.reservedBy} + ' ›'">—</span>
                                 <span th:if="${it.heldBy == null and it.reservedBy == null}" class="vb-dim">
                                     <span th:if="${it.session}">ยังไม่มี event booking</span>
                                     <span th:unless="${it.session}">ว่าง พร้อมให้ยืม</span>
