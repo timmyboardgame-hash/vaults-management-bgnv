@@ -893,10 +893,13 @@ code {
 .vb-card { background: var(--vm-surface); border: 1px solid var(--vm-border); border-left: 3px solid var(--vm-border-2);
            border-radius: var(--vm-radius-sm); padding: 0.65rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem;
            transition: border-color 0.15s, transform 0.12s; }
-.vb-card:hover { transform: translateY(-1px); }
+.vb-card:hover { transform: translateY(-1px); border-color: var(--vm-violet); opacity: 1; }
+.vb-card:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; opacity: 1; }
 .vb-card--out { border-left-color: #fbbf24; }
 .vb-card--over { border-left-color: #fb923c; }
-.vb-card--in { border-left-color: var(--vm-border-2); opacity: 0.62; }
+.vb-card--in { border-left-color: var(--vm-border-2); opacity: 0.88; }
+/* ต้องมาหลัง .vb-card--in ไม่งั้น opacity ของมันทับ hover (specificity เท่ากัน) */
+.vb-card--in:hover, .vb-card--in:focus-visible { opacity: 1; border-color: var(--vm-violet); }
 .vb-card--session { border-color: rgba(124,58,237,.35); border-left-color: var(--vm-violet);
                     background: linear-gradient(180deg, var(--vm-violet-soft), var(--vm-surface) 70%); opacity: 1; }
 .vb-card-name { font-size: 0.77rem; font-weight: 640; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
