@@ -107,8 +107,9 @@
                              th:classappend="(${it.session} ? ' vb-card--session' : '')
                                            + (${it.over} ? ' vb-card--over' : (${it.out} ? ' vb-card--out' : ' vb-card--in'))"
                              th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')},
-                                      data-href='/booking-monitor/' + ${b.vaultId} + '/' + ${it.itemId}"
-                             onclick="window.location.href=this.dataset.href"
+                                      hx-get='/booking-monitor/' + ${b.vaultId} + '/' + ${it.itemId} + '/sheet'"
+                             hx-target="#item-sheet" hx-swap="innerHTML"
+                             @click="sheet = 'item'"
                              tabindex="0" role="button"
                              th:aria-label="'ประวัติของกล่อง ' + ${it.itemName}"
                              style="cursor:pointer">
@@ -153,6 +154,15 @@
                         </div>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- ══ Drill-down: history ของกล่อง (โหลดตอนคลิกผ่าน HTMX — ไม่ render ล่วงหน้าทุกใบ) ══ -->
+        <div class="modal-overlay" x-show="sheet === 'item'" x-cloak @click.self="sheet = null">
+            <div class="modal-content" style="max-width:640px">
+                <div id="item-sheet">
+                    <div class="modal-body"><p class="vb-empty mb-0">กำลังโหลด…</p></div>
+                </div>
             </div>
         </div>
 
