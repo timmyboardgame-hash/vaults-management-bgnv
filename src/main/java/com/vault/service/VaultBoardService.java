@@ -123,6 +123,69 @@ public class VaultBoardService {
         );
     }
 
+    /**
+     * ประวัติของกล่อง 1 ใบ — รวมทุก booking ที่เคยยืมกล่องนี้
+     *
+     * สำคัญ: กล่องถูกยืมได้ 2 ทาง จึงต้องหาจากทั้งสองแหล่ง
+     *   game booking  → booking.item ชี้กล่องนี้ตรงๆ
+     *   event booking → booking.item เป็น session pass แต่มี MOVE event ที่ epc/serial ตรงกล่องนี้
+     * (ของเดิมดูแค่ booking.item จึงไม่เห็นการยืมผ่าน event booking เลย)
+     */
+    public Optional<ItemHistory> getItemHistory(String vaultId, String itemId, int daysBack) {
+        Optional<Vault> vaultOpt = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId);
+        if (vaultOpt.isEmpty()) return Optional.empty();
+        Vault vault = vaultOpt.get();
+
+        VaultItem vi = vaultItemRepository.findByVaultId(vaultId).stream()
+                .filter(x -> x.getItem().getItemId().equals(itemId))
+                .findFirst().orElse(null);
+        if (vi == null) return Optional.empty();
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime since = LocalDate.now().minusDays(daysBack).atStartOfDay();
+
+        List<BoardBooking> bookings = bookingRepository.findBoardBookings(vaultId, since)
+                .stream().map(b -> toBoardBooking(b, now)).toList();
+
+        // เก็บทุก cycle ที่อ้างถึงกล่องนี้ (จับคู่ด้วย epc ก่อน แล้ว serial)
+        List<Borrow> borrows = new ArrayList<>();
+        for (BoardBooking b : bookings) {
+            for (Cycle c : b.cycles()) {
+                if (c.pending()) continue;
+                boolean isThisItem = c.matchKey() != null
+                        && (c.matchKey().equals(vi.getRfidTag()) || c.matchKey().equals(vi.getSerialNumber()));
+                if (!isThisItem) continue;
+                borrows.add(new Borrow(b.bookingId(), b.type(), b.agentName(),
+                        c.pickedUpAt(), c.returnedAt(), c.minutes(), c.late()));
+            }
+        }
+        borrows.sort((x, y) -> {
+            if (x.pickedUpAt() == null || y.pickedUpAt() == null) return 0;
+            return y.pickedUpAt().compareTo(x.pickedUpAt());   // ล่าสุดขึ้นก่อน
+        });
+
+        Borrow open = borrows.stream().filter(x -> x.returnedAt() == null).findFirst().orElse(null);
+        long total = borrows.stream().mapToLong(Borrow::minutes).sum();
+        int lateCount = (int) borrows.stream().filter(Borrow::late).count();
+
+        return Optional.of(new ItemHistory(
+                vaultId,
+                vault.getVaultName(),
+                itemId,
+                vi.getItem().getItemNameEn(),
+                vi.getSerialNumber(),
+                vi.getRfidTag(),
+                open != null,
+                open != null ? open.bookingId() : null,
+                open != null ? open.minutes() : 0,
+                borrows.size(),
+                total,
+                borrows.isEmpty() ? 0 : Math.round((double) total / borrows.size()),
+                lateCount,
+                borrows
+        ));
+    }
+
     // ── booking → board row (พร้อม cycles + timeline) ──────────────────────────
     private BoardBooking toBoardBooking(Booking b, LocalDateTime now) {
         boolean isEvent = b.getItem() != null && sessionItemIds.contains(b.getItem().getItemId());

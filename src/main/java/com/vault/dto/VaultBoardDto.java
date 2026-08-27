@@ -59,6 +59,35 @@ public class VaultBoardDto {
         boolean session              // เป็น session pass (ไม่ใช่กล่องเกมจริง)
     ) {}
 
+    /** การยืม 1 ครั้งของกล่องใบหนึ่ง — มาจาก game booking หรือ 1 รอบใน event booking */
+    public record Borrow(
+        String bookingId,
+        String type,                 // "event" | "game"
+        String agentName,
+        OffsetDateTime pickedUpAt,
+        OffsetDateTime returnedAt,   // null = ยังไม่คืน
+        long minutes,
+        boolean late
+    ) {}
+
+    /** ประวัติของกล่อง 1 ใบ — รวมทุก booking ที่เคยยืม ไม่ว่าจะผ่าน event หรือรายกล่อง */
+    public record ItemHistory(
+        String vaultId,
+        String vaultName,
+        String itemId,
+        String itemName,
+        String serialNumber,
+        String rfidTag,
+        boolean out,                 // ถูกหยิบอยู่ตอนนี้
+        String heldBy,
+        long currentMinutes,         // ออกไปแล้วกี่นาที (ถ้ายังไม่คืน)
+        int totalBorrows,
+        long totalMinutes,
+        long avgMinutes,
+        int lateCount,
+        List<Borrow> borrows         // ล่าสุดขึ้นก่อน
+    ) {}
+
     public record Board(
         String vaultId,
         String vaultName,
