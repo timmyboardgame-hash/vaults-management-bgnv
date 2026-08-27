@@ -72,7 +72,8 @@
                             <div class="bm-timeline-events">
                                 <div th:each="event : ${data.currentBooking.events}" class="bm-timeline-event">
                                     <div class="bm-timeline-dot"
-                                         th:classappend="${#strings.startsWith(event.status,'ANOMALY')} ? ' bm-dot-anomaly' : ''"></div>
+                                         th:classappend="${#strings.startsWith(event.status,'ANOMALY')} ? ' bm-dot-anomaly'
+                                                       : (${#strings.startsWith(event.status,'MOVE')} ? ' bm-dot-move' : '')"></div>
                                     <div class="bm-timeline-content">
                                         <span class="bm-timeline-status" th:text="${event.status}">STATUS</span>
                                         <span class="bm-timeline-time"

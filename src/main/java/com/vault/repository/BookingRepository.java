@@ -41,6 +41,14 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
+    // Vault Board — booking ทุกใบของตู้: ที่ยังไม่จบ + ที่จบแล้วตั้งแต่ :since
+    // ไม่กรอง deletedAt เพราะ game booking ที่ CANCELLED ถูก soft-delete แต่ยังต้องแสดงในประวัติ
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item JOIN FETCH b.agent WHERE b.vault.vaultId = :vaultId " +
+           "AND (b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') OR b.updatedAt >= :since) " +
+           "ORDER BY b.updatedAt DESC")
+    List<Booking> findBoardBookings(@Param("vaultId") String vaultId,
+                                    @Param("since") java.time.LocalDateTime since);
+
     // booking ที่ยังไม่จบแต่เลยเวลาสิ้นสุดแล้ว — scheduler ใช้ปิด session booking ที่หมดเวลา
     // รวม OVERDUE ด้วย: เช็คซ้ำทุกรอบเผื่อของครบแล้ว (กันเคส event คืนชิ้นสุดท้ายประมวลผลพลาด)
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +

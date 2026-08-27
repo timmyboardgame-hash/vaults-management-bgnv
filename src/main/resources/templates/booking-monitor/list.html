@@ -17,25 +17,55 @@
         </div>
 
         <!-- auto-refresh ทุก 5s เฉพาะตอน tab active -->
-        <div id="bm-grid" th:fragment="bm-grid"
+        <div id="bm-grid" th:fragment="bm-grid" class="bm-vault-grid"
              hx-get="/booking-monitor"
              hx-trigger="every 5s [document.visibilityState=='visible']"
              hx-target="#bm-grid"
              hx-swap="outerHTML">
 
-        <div th:if="${vaults.isEmpty()}" class="detail-card">
+        <div th:if="${vaults.isEmpty()}" class="detail-card bm-vault-wide">
             <p class="text-muted mb-0">No vaults found</p>
         </div>
 
-        <div th:each="vault : ${vaults}" class="detail-card" style="margin-bottom: 1rem;">
+        <div th:each="vault : ${vaults}" class="detail-card">
             <div class="detail-card-title" style="display:flex; align-items:center; justify-content:space-between;">
                 <span>
                     <i class="bi bi-safe2-fill me-2"></i>
                     <span th:text="${vault.vaultName}">Vault</span>
                 </span>
-                <span class="badge rounded-pill"
-                      th:text="${vault.online} ? 'ONLINE' : 'OFFLINE'"
-                      th:classappend="${vault.online} ? 'badge-ONLINE' : 'badge-OFFLINE'">—</span>
+                <span style="display:flex; align-items:center; gap:.6rem;">
+                    <!-- เข้าหน้า board ของตู้นี้ — booking ทุกใบ + สถานะกล่อง -->
+                    <a class="btn btn-sm btn-ghost"
+                       th:href="'/booking-monitor/' + ${vault.vaultId}"
+                       style="font-size:.72rem; text-transform:none; letter-spacing:0;">
+                        ดู booking ของตู้นี้ <i class="bi bi-chevron-right"></i>
+                    </a>
+                    <span class="badge rounded-pill"
+                          th:text="${vault.online} ? 'ONLINE' : 'OFFLINE'"
+                          th:classappend="${vault.online} ? 'badge-ONLINE' : 'badge-OFFLINE'">—</span>
+                </span>
+            </div>
+
+            <!-- Session Pass — การ์ดแยกเต็มความกว้าง ไม่ปนกับกริดกล่องเกม -->
+            <div th:if="${vault.sessionSlot != null}"
+                 class="bm-session"
+                 th:classappend="${vault.sessionSlot.occupied} ? 'bm-session--' + ${vault.sessionSlot.currentStatus} : 'bm-session--empty'"
+                 th:attr="data-href='/booking-monitor/' + ${vault.vaultId} + '/' + ${vault.sessionSlot.itemId}"
+                 onclick="window.location.href=this.dataset.href">
+                <div class="bm-session-left">
+                    <i class="bi bi-hourglass-split bm-session-icon"></i>
+                    <div>
+                        <div class="bm-session-label">Event Booking — เหมาช่วงเวลา</div>
+                        <div class="bm-session-sub"
+                             th:text="${vault.sessionSlot.occupied}
+                                      ? 'กำลังใช้งาน · ' + ${vault.sessionSlot.currentBookingId}
+                                      : 'ยังไม่มีการจอง — หยิบเกมไหนก็ได้ในช่วงที่จอง'">—</div>
+                    </div>
+                </div>
+                <span th:if="${vault.sessionSlot.occupied}" class="badge rounded-pill"
+                      th:text="${vault.sessionSlot.currentStatus}"
+                      th:classappend="'badge-' + ${vault.sessionSlot.currentStatus}">—</span>
+                <span th:unless="${vault.sessionSlot.occupied}" class="badge rounded-pill badge-IDLE">ว่าง</span>
             </div>
 
             <div th:if="${vault.slots.isEmpty()}" class="text-muted" style="font-size:0.85rem;">
