@@ -35,6 +35,12 @@ public class BookingService {
     private static final ZoneId BANGKOK = ZoneId.of("Asia/Bangkok");
     private static final ZoneOffset BANGKOK_OFFSET = ZoneOffset.ofHours(7);
 
+    // anomaly ที่เป็น "สถานะต่อเนื่อง" — device ส่งย้ำทุก heartbeat (ทุก 15 นาที) ตราบใดที่ยังไม่คลี่คลาย
+    // บันทึกซ้ำทุกครั้งจะทำให้ timeline บวม (ค้าง 1 วัน ≈ 96 rows) จึงเขียนเฉพาะครั้งแรกของช่วงนั้น
+    // ส่วน wrong_tag / force_unlock / lockdown_cleared เป็นเหตุการณ์รายครั้ง — เก็บทุกครั้งตามเดิม
+    private static final java.util.Set<String> CONTINUOUS_ANOMALIES =
+        java.util.Set.of("late_return", "lockdown_triggered");
+
     private final BookingRepository            bookingRepository;
     private final BookingStatusEventRepository bookingStatusEventRepository;
     private final AgentRepository      agentRepository;
@@ -264,9 +270,17 @@ public class BookingService {
 
         if ("booking_anomaly".equals(req.event())) {
             String anomalyType = req.anomalyType() != null ? req.anomalyType() : "unknown";
+            String status = "ANOMALY:" + anomalyType;
             String level = "lockdown_triggered".equals(anomalyType) ? "CRITICAL" : "WARNING";
             log.warn("[IoT-EVENT] ANOMALY booking={} type={} level={}", bookingId, anomalyType, level);
-            recordStatusEvent(booking, "ANOMALY:" + anomalyType, req.error());
+
+            // ย้ำสถานะเดิมซ้ำ (เช่น late_return ทุก heartbeat) → log ไว้แต่ไม่เขียน timeline ซ้ำ
+            // เทียบกับ event ล่าสุด: lockdown → cleared → lockdown รอบใหม่ ยังบันทึกได้ปกติ
+            if (CONTINUOUS_ANOMALIES.contains(anomalyType) && status.equals(latestStatusOf(booking))) {
+                log.info("[IoT-EVENT] booking={} ยัง {} อยู่ — ไม่บันทึกซ้ำใน timeline", bookingId, status);
+                return;
+            }
+            recordStatusEvent(booking, status, req.error());
             return;
         }
 
@@ -325,6 +339,13 @@ public class BookingService {
             Booking saved = bookingRepository.save(booking);
             recordStatusEvent(saved, newStatus, req.error());
         }
+    }
+
+    /** status ของ event ล่าสุดใน timeline ของ booking (null ถ้ายังไม่มี) */
+    private String latestStatusOf(Booking booking) {
+        List<BookingStatusEvent> events =
+            bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(booking.getId());
+        return events.isEmpty() ? null : events.get(events.size() - 1).getStatus();
     }
 
     /** แปลง epc → คำอธิบายกล่อง "Catan (SN-001) epc=E280..." สำหรับ movement note */
