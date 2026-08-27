@@ -75,7 +75,7 @@
                     <div class="vb-sec">
                         <h2>Booking ของตู้นี้
                             <span class="vb-cnt" th:text="${b.active.size() + b.done.size()}">0</span></h2>
-                        <span class="vb-hint">คลิกเพื่อดู history</span>
+                        <span class="vb-hint">คลิกเพื่อดู history · วางเมาส์เพื่อดูว่าถือกล่องไหน</span>
                     </div>
 
                     <div class="vb-group">กำลังใช้งาน (<span th:text="${b.active.size()}">0</span>)</div>
@@ -166,6 +166,25 @@
 
     </main>
 </div>
+
+<script>
+  // เชื่อมสองมุมมอง: hover ที่ booking หรือกล่อง → ไฮไลต์ทุก element ที่ผูกกับ booking เดียวกัน
+  // ผูกที่ document (event delegation) จึงยังทำงานหลัง HTMX swap DOM ทุก 5 วินาที
+  (function () {
+    const toggle = (id, on) => {
+      if (!id) return;
+      document.querySelectorAll('[data-booking="' + CSS.escape(id) + '"]')
+              .forEach(el => el.classList.toggle('hl', on));
+    };
+    const target = e => e.target.closest('[data-booking]');
+
+    document.addEventListener('mouseover', e => { const t = target(e); if (t) toggle(t.dataset.booking, true); });
+    document.addEventListener('mouseout',  e => { const t = target(e); if (t) toggle(t.dataset.booking, false); });
+    // คีย์บอร์ด: โฟกัสแถว booking แล้วเห็นกล่องที่ถืออยู่ด้วย
+    document.addEventListener('focusin',  e => { const t = target(e); if (t) toggle(t.dataset.booking, true); });
+    document.addEventListener('focusout', e => { const t = target(e); if (t) toggle(t.dataset.booking, false); });
+  })();
+</script>
 
 </body>
 </html>

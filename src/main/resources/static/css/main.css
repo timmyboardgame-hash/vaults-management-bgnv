@@ -956,3 +956,10 @@ code {
 /* ป้าย booking บนการ์ดกล่อง — คลิกแยกจากตัวการ์ด (การ์ด = ประวัติกล่อง, ป้าย = ประวัติ booking) */
 .vb-card-bklink { color: var(--vm-text-2); cursor: pointer; border-bottom: 1px dashed var(--vm-border-2); }
 .vb-card-bklink:hover { color: #a78bfa; border-bottom-color: #a78bfa; }
+
+/* เชื่อมสองมุมมอง: hover ที่ booking → กล่องที่ถืออยู่สว่างขึ้น (และกลับกัน) */
+.vb-bk.hl, .vb-card.hl {
+    border-color: var(--vm-violet);
+    background: linear-gradient(90deg, var(--vm-violet-soft), var(--vm-surface) 65%);
+}
+.vb-card.hl { background: linear-gradient(180deg, var(--vm-violet-soft), var(--vm-surface) 70%); opacity: 1; }
