@@ -27,6 +27,7 @@ public class BookingMonitorService {
     private final VaultItemRepository vaultItemRepository;
     private final BookingRepository bookingRepository;
     private final BookingStatusEventRepository bookingStatusEventRepository;
+    private final VaultBoardService vaultBoardService;
 
     // itemId ที่เป็น session pass — แยกออกจาก grid กล่องเกม แสดงเป็นการ์ดของตัวเอง
     private final List<String> sessionItemIds;
@@ -35,37 +36,59 @@ public class BookingMonitorService {
                                  VaultItemRepository vaultItemRepository,
                                  BookingRepository bookingRepository,
                                  BookingStatusEventRepository bookingStatusEventRepository,
+                                 VaultBoardService vaultBoardService,
                                  @org.springframework.beans.factory.annotation.Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.vaultRepository = vaultRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bookingRepository = bookingRepository;
         this.bookingStatusEventRepository = bookingStatusEventRepository;
+        this.vaultBoardService = vaultBoardService;
         this.sessionItemIds = sessionItemIds;
     }
 
-    /** Grid view — ทุก vault พร้อม slot (VaultItem) และ current booking ของแต่ละ slot */
+    /**
+     * Grid view — ทุก vault พร้อมสถานะกล่อง
+     *
+     * ใช้ข้อมูลจาก VaultBoardService เพราะกล่องถูกหยิบได้ 2 ทาง:
+     * game booking (booking.item ชี้กล่องตรงๆ) และ event booking (ผูกกับ session pass
+     * แต่มี MOVE event ที่ epc/serial ของกล่อง) — การดูแค่ booking.item ทำให้กล่องที่
+     * ถูกหยิบไปกับ event booking แสดงว่า "ว่าง" ทั้งที่ไม่อยู่ในตู้
+     */
     public List<MonitorVault> getMonitorGrid() {
         List<Vault> vaults = vaultRepository.findAllByDeletedAtIsNullOrderByCreatedAtDesc();
 
         return vaults.stream().map(vault -> {
-            List<VaultItem> vaultItems = vaultItemRepository.findByVaultId(vault.getVaultId());
+            var board = vaultBoardService.getBoard(vault.getVaultId()).orElse(null);
+            if (board == null) {
+                return new MonitorVault(vault.getVaultId(), vault.getVaultName(),
+                        "ENABLE".equals(vault.getVaultStatus()), vault.getVaultSlot(),
+                        List.of(), null);
+            }
 
-            List<MonitorSlot> gameSlots = vaultItems.stream()
-                    .filter(vi -> !sessionItemIds.contains(vi.getItem().getItemId()))
-                    .map(vi -> toSlot(vault, vi))
+            List<MonitorSlot> gameSlots = board.items().stream()
+                    .filter(i -> !i.session())
+                    .map(this::toSlot)
                     .toList();
 
-            // session pass ของตู้นี้ (ถ้ามี) — แสดงเป็นการ์ดแยก ไม่ปนกับกล่องเกม
-            MonitorSlot sessionSlot = vaultItems.stream()
-                    .filter(vi -> sessionItemIds.contains(vi.getItem().getItemId()))
+            // session pass ไม่เคยถูก "หยิบ" (ไม่มี MOVE event ของตัวเอง) จึงต้องดูจาก
+            // event booking ที่ยังไม่จบของตู้นี้แทน ไม่งั้นการ์ดจะขึ้นว่างทั้งที่มี session เปิดอยู่
+            var openEvent = board.active().stream()
+                    .filter(bk -> "event".equals(bk.type()))
+                    .findFirst().orElse(null);
+            MonitorSlot sessionSlot = board.items().stream()
+                    .filter(com.vault.dto.VaultBoardDto.BoardItem::session)
                     .findFirst()
-                    .map(vi -> toSlot(vault, vi))
+                    .map(i -> new MonitorSlot(
+                            i.serialNumber(), i.itemId(), i.itemName(),
+                            openEvent != null,
+                            openEvent != null ? openEvent.bookingId() : null,
+                            openEvent != null ? openEvent.status() : null))
                     .orElse(null);
 
             return new MonitorVault(
                     vault.getVaultId(),
                     vault.getVaultName(),
-                    "ENABLE".equals(vault.getVaultStatus()),
+                    board.online(),
                     vault.getVaultSlot(),
                     gameSlots,
                     sessionSlot
@@ -73,72 +96,19 @@ public class BookingMonitorService {
         }).toList();
     }
 
-    private MonitorSlot toSlot(Vault vault, VaultItem vi) {
-        List<Booking> active = bookingRepository.findActiveByVaultAndItemBusinessId(
-                vault.getVaultId(), vi.getItem().getItemId());
-        Booking current = active.isEmpty() ? null : active.get(0);
+    /** BoardItem → MonitorSlot (occupied = ถูกหยิบอยู่ หรือถูกจองไว้รอรับ) */
+    private MonitorSlot toSlot(com.vault.dto.VaultBoardDto.BoardItem i) {
+        String bookingId = i.heldBy() != null ? i.heldBy() : i.reservedBy();
+        String status = i.heldBy() != null ? (i.over() ? "OVERDUE" : "ACTIVE")
+                      : i.reservedBy() != null ? "CONFIRMED" : null;
         return new MonitorSlot(
-                vi.getSlotId(),
-                vi.getItem().getItemId(),
-                vi.getItem().getItemNameEn(),
-                current != null,
-                current != null ? current.getBookingId() : null,
-                current != null ? current.getBookingStatus() : null
+                i.serialNumber(),
+                i.itemId(),
+                i.itemName(),
+                bookingId != null,
+                bookingId,
+                status
         );
-    }
-
-    /** Detail view — current booking + history (พร้อม timeline) ของ vault+item ที่ระบุ */
-    public ItemHistoryDto getItemHistory(String vaultId, String itemId) {
-        List<Booking> all = bookingRepository.findByVaultAndItemBusinessId(vaultId, itemId);
-
-        Booking current = all.stream()
-                .filter(b -> !TERMINAL_STATUSES.contains(b.getBookingStatus()))
-                .findFirst().orElse(null);
-
-        List<Booking> historyBookings = all.stream()
-                .filter(b -> TERMINAL_STATUSES.contains(b.getBookingStatus()))
-                .toList();
-
-        List<StatusEventDto> currentEvents = current != null
-                ? bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(current.getId())
-                        .stream().map(e -> new StatusEventDto(e.getStatus(), toOffset(e.getOccurredAt()), e.getNote()))
-                        .toList()
-                : List.of();
-
-        CurrentBookingDto currentDto = current != null ? new CurrentBookingDto(
-                current.getBookingId(),
-                current.getAgent().getAgentId(),
-                current.getAgent().getAgentName(),
-                current.getItem().getItemNameEn(),
-                current.getBookingStatus(),
-                toOffset(current.getBookingTimeStart()),
-                toOffset(current.getBookingTimeEnd()),
-                current.getPin(),
-                currentEvents
-        ) : null;
-
-        List<HistoryBookingDto> historyDtos = historyBookings.stream().map(b -> {
-            List<BookingStatusEvent> events = bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(b.getId());
-            List<StatusEventDto> eventDtos = events.stream()
-                    .map(e -> new StatusEventDto(e.getStatus(), toOffset(e.getOccurredAt()), e.getNote()))
-                    .toList();
-
-            return new HistoryBookingDto(
-                    b.getBookingId(),
-                    b.getAgent().getAgentId(),
-                    b.getAgent().getAgentName(),
-                    b.getItem().getItemNameEn(),
-                    toOffset(b.getBookingTimeStart()),
-                    toOffset(b.getBookingTimeEnd()),
-                    b.getBookingStatus(),
-                    eventDtos
-            );
-        }).toList();
-
-        String vaultName = all.isEmpty() ? vaultId : all.get(0).getVault().getVaultName();
-        String itemNameEn = all.isEmpty() ? itemId : all.get(0).getItem().getItemNameEn();
-
-        return new ItemHistoryDto(vaultId, vaultName, itemId, itemNameEn, currentDto, historyDtos);
     }
 
     private OffsetDateTime toOffset(LocalDateTime ldt) {
