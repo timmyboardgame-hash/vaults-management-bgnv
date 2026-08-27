@@ -75,7 +75,7 @@
                     <div class="vb-sec">
                         <h2>Booking ของตู้นี้
                             <span class="vb-cnt" th:text="${b.active.size() + b.done.size()}">0</span></h2>
-                        <span class="vb-hint">คลิกเพื่อดู history</span>
+                        <span class="vb-hint">คลิกเพื่อดู history · วางเมาส์เพื่อดูว่าถือกล่องไหน</span>
                     </div>
 
                     <div class="vb-group">กำลังใช้งาน (<span th:text="${b.active.size()}">0</span>)</div>
@@ -101,15 +101,18 @@
                     <div th:if="${b.items.isEmpty()}" class="vb-empty">ยังไม่มี item ผูกกับ vault นี้</div>
 
                     <div class="vb-grid">
+                        <!-- คลิกที่การ์ด = ประวัติของกล่องใบนี้ · คลิกที่ป้าย booking ด้านล่าง = ประวัติของ booking -->
                         <div th:each="it : ${b.items}"
                              class="vb-card"
                              th:classappend="(${it.session} ? ' vb-card--session' : '')
                                            + (${it.over} ? ' vb-card--over' : (${it.out} ? ' vb-card--out' : ' vb-card--in'))"
-                             th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')}"
-                             th:with="link=${it.heldBy != null ? it.heldBy : it.reservedBy}"
-                             th:attrappend="data-open=${link}"
-                             @click="if ($el.dataset.open) sheet = $el.dataset.open"
-                             th:style="${link != null} ? 'cursor:pointer' : ''">
+                             th:attr="data-booking=${it.heldBy != null ? it.heldBy : (it.reservedBy != null ? it.reservedBy : '')},
+                                      hx-get='/booking-monitor/' + ${b.vaultId} + '/' + ${it.itemId} + '/sheet'"
+                             hx-target="#item-sheet" hx-swap="innerHTML"
+                             @click="sheet = 'item'"
+                             tabindex="0" role="button"
+                             th:aria-label="'ประวัติของกล่อง ' + ${it.itemName}"
+                             style="cursor:pointer">
                             <div>
                                 <div class="vb-card-name">
                                     <span th:if="${it.session}">⏳ </span><span th:text="${it.itemName}">Item</span>
@@ -134,10 +137,15 @@
                             </div>
 
                             <div class="vb-card-by">
-                                <span th:if="${it.heldBy != null}"
-                                      th:text="(${#strings.startsWith(it.heldBy,'EV')} ? '⏳ ' : '') + ${it.heldBy}">—</span>
-                                <span th:if="${it.heldBy == null and it.reservedBy != null}"
-                                      th:text="'จองไว้ · ' + ${it.reservedBy}">—</span>
+                                <!-- @click.stop กัน bubble ไป onclick ของการ์ด (ที่พาไปหน้าประวัติกล่อง) -->
+                                <span th:if="${it.heldBy != null}" class="vb-card-bklink"
+                                      th:attr="data-open=${it.heldBy}"
+                                      @click.stop="sheet = $el.dataset.open"
+                                      th:text="(${#strings.startsWith(it.heldBy,'EV')} ? '⏳ ' : '') + ${it.heldBy} + ' ›'">—</span>
+                                <span th:if="${it.heldBy == null and it.reservedBy != null}" class="vb-card-bklink"
+                                      th:attr="data-open=${it.reservedBy}"
+                                      @click.stop="sheet = $el.dataset.open"
+                                      th:text="'จองไว้ · ' + ${it.reservedBy} + ' ›'">—</span>
                                 <span th:if="${it.heldBy == null and it.reservedBy == null}" class="vb-dim">
                                     <span th:if="${it.session}">ยังไม่มี event booking</span>
                                     <span th:unless="${it.session}">ว่าง พร้อมให้ยืม</span>
@@ -146,6 +154,15 @@
                         </div>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- ══ Drill-down: history ของกล่อง (โหลดตอนคลิกผ่าน HTMX — ไม่ render ล่วงหน้าทุกใบ) ══ -->
+        <div class="modal-overlay" x-show="sheet === 'item'" x-cloak @click.self="sheet = null">
+            <div class="modal-content" style="max-width:640px">
+                <div id="item-sheet">
+                    <div class="modal-body"><p class="vb-empty mb-0">กำลังโหลด…</p></div>
+                </div>
             </div>
         </div>
 
@@ -159,6 +176,25 @@
 
     </main>
 </div>
+
+<script>
+  // เชื่อมสองมุมมอง: hover ที่ booking หรือกล่อง → ไฮไลต์ทุก element ที่ผูกกับ booking เดียวกัน
+  // ผูกที่ document (event delegation) จึงยังทำงานหลัง HTMX swap DOM ทุก 5 วินาที
+  (function () {
+    const toggle = (id, on) => {
+      if (!id) return;
+      document.querySelectorAll('[data-booking="' + CSS.escape(id) + '"]')
+              .forEach(el => el.classList.toggle('hl', on));
+    };
+    const target = e => e.target.closest('[data-booking]');
+
+    document.addEventListener('mouseover', e => { const t = target(e); if (t) toggle(t.dataset.booking, true); });
+    document.addEventListener('mouseout',  e => { const t = target(e); if (t) toggle(t.dataset.booking, false); });
+    // คีย์บอร์ด: โฟกัสแถว booking แล้วเห็นกล่องที่ถืออยู่ด้วย
+    document.addEventListener('focusin',  e => { const t = target(e); if (t) toggle(t.dataset.booking, true); });
+    document.addEventListener('focusout', e => { const t = target(e); if (t) toggle(t.dataset.booking, false); });
+  })();
+</script>
 
 </body>
 </html>

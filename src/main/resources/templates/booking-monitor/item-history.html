@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Item History')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('booking-monitor')}"></div>
+
+    <main class="main-content">
+
+        <div class="page-header">
+            <div>
+                <a th:href="'/booking-monitor/' + ${h.vaultId}" class="btn btn-sm btn-ghost mb-2">
+                    <i class="bi bi-arrow-left me-1"></i>กลับไปที่ <span th:text="${h.vaultName}">vault</span>
+                </a>
+                <h1 class="page-title" th:text="${h.itemName}">Item</h1>
+                <p class="page-subtitle">
+                    ประวัติการยืมของกล่องใบนี้ · 30 วันล่าสุด ·
+                    serial <code th:text="${h.serialNumber != null ? h.serialNumber : '— ยังไม่ตั้ง'}">—</code>
+                    <span th:if="${h.rfidTag != null}"> · RFID <code th:text="${h.rfidTag}">—</code></span>
+                </p>
+            </div>
+            <span class="badge rounded-pill"
+                  th:text="${h.out} ? 'ถูกหยิบอยู่' : 'อยู่ในตู้'"
+                  th:classappend="${h.out} ? 'badge-ACTIVE' : 'badge-CONFIRMED'">—</span>
+        </div>
+
+        <div th:replace="~{booking-monitor/item-history-parts :: body}"></div>
+
+    </main>
+</div>
+
+</body>
+</html>

@@ -42,9 +42,21 @@ public class BookingMonitorWebController {
         }).orElse("redirect:/booking-monitor");
     }
 
+    /** ประวัติของกล่อง 1 ใบ — รวมการยืมผ่าน event booking ด้วย (ย้อนหลัง 30 วัน) */
     @GetMapping("/{vaultId}/{itemId}")
-    public String detail(@PathVariable String vaultId, @PathVariable String itemId, Model model) {
-        model.addAttribute("data", bookingMonitorService.getItemHistory(vaultId, itemId));
-        return "booking-monitor/detail";
+    public String itemHistory(@PathVariable String vaultId, @PathVariable String itemId, Model model) {
+        return vaultBoardService.getItemHistory(vaultId, itemId, 30).map(h -> {
+            model.addAttribute("h", h);
+            return "booking-monitor/item-history";
+        }).orElse("redirect:/booking-monitor/" + vaultId);
+    }
+
+    /** เนื้อหาเดียวกัน แต่ส่งเป็น fragment ให้ modal บนหน้า board (ไม่ต้องออกจากหน้า) */
+    @GetMapping("/{vaultId}/{itemId}/sheet")
+    public String itemHistorySheet(@PathVariable String vaultId, @PathVariable String itemId, Model model) {
+        return vaultBoardService.getItemHistory(vaultId, itemId, 30).map(h -> {
+            model.addAttribute("h", h);
+            return "booking-monitor/item-sheet :: sheet";
+        }).orElse("booking-monitor/item-sheet :: empty");
     }
 }

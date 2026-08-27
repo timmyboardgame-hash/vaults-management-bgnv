@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+
+<!-- เนื้อหาประวัติกล่อง — ใช้ทั้งในหน้าเต็มและใน modal บนหน้า board -->
+<div th:fragment="body">
+        <!-- สถานะตอนนี้ -->
+        <div th:if="${h.out}" class="vb-bk vb-bk--ACTIVE" style="cursor:default; margin-bottom:1.2rem">
+            <div class="vb-bk-ic" th:classappend="${#strings.startsWith(h.heldBy,'EV')} ? ' vb-bk-ic--ev' : ''"
+                 th:text="${#strings.startsWith(h.heldBy,'EV')} ? '⏳' : '🎲'">🎲</div>
+            <div class="vb-bk-main">
+                <div class="vb-bk-id">กำลังถูกยืมอยู่</div>
+                <div class="vb-bk-meta">
+                    อยู่กับ booking
+                    <a th:href="'/booking-monitor/' + ${h.vaultId}" class="vb-card-bklink"
+                       th:text="${h.heldBy}">—</a>
+                </div>
+            </div>
+            <div class="vb-bk-r">
+                <div class="vb-bk-clock"
+                     th:text="${h.currentMinutes >= 60}
+                              ? ${h.currentMinutes / 60} + ' ชม. ' + ${h.currentMinutes % 60} + ' น.'
+                              : ${h.currentMinutes} + ' นาที'">—</div>
+                <div class="vb-bk-clock-k">ออกไปแล้ว</div>
+            </div>
+        </div>
+
+        <!-- สรุป -->
+        <div class="vb-summary" style="grid-template-columns: repeat(4, 1fr)">
+            <div class="vb-tile">
+                <div class="vb-tile-k">ยืมไปแล้ว</div>
+                <div class="vb-tile-v vb-vio" th:text="${h.totalBorrows}">0</div>
+                <div class="vb-tile-n">ครั้ง (30 วันล่าสุด)</div>
+            </div>
+            <div class="vb-tile">
+                <div class="vb-tile-k">เวลายืมรวม</div>
+                <div class="vb-tile-v vb-busy"
+                     th:text="${h.totalMinutes >= 60}
+                              ? ${h.totalMinutes / 60} + ' ชม.'
+                              : ${h.totalMinutes} + ' น.'">0</div>
+                <div class="vb-tile-n" th:text="${h.totalMinutes} + ' นาที'">—</div>
+            </div>
+            <div class="vb-tile">
+                <div class="vb-tile-k">เฉลี่ยต่อครั้ง</div>
+                <div class="vb-tile-v vb-ok" th:text="${h.avgMinutes} + ' น.'">0</div>
+                <div class="vb-tile-n">ต่อการยืม 1 ครั้ง</div>
+            </div>
+            <div class="vb-tile">
+                <div class="vb-tile-k">คืนช้ากว่ากำหนด</div>
+                <div class="vb-tile-v" th:classappend="${h.lateCount > 0} ? 'vb-over' : 'vb-ok'"
+                     th:text="${h.lateCount}">0</div>
+                <div class="vb-tile-n" th:text="${h.lateCount > 0} ? 'ครั้ง' : 'ตรงเวลาทุกครั้ง'">—</div>
+            </div>
+        </div>
+
+        <!-- รายการการยืม -->
+        <div class="vb-sec">
+            <h2>การยืมแต่ละครั้ง <span class="vb-cnt" th:text="${h.borrows.size()}">0</span></h2>
+            <span class="vb-hint">ล่าสุดขึ้นก่อน · คลิกเพื่อดู booking นั้น</span>
+        </div>
+
+        <div th:if="${h.borrows.isEmpty()}" class="vb-empty">
+            ยังไม่มีประวัติการยืมกล่องนี้ใน 30 วันที่ผ่านมา
+        </div>
+
+        <div th:each="bw : ${h.borrows}"
+             class="vb-bk"
+             th:classappend="${bw.returnedAt == null} ? ' vb-bk--ACTIVE' : (${bw.late} ? ' vb-bk--OVERDUE' : ' vb-bk--RETURNED')"
+             th:attr="data-href='/booking-monitor/' + ${h.vaultId}"
+             onclick="window.location.href=this.dataset.href"
+             tabindex="0" role="button">
+            <div class="vb-bk-ic" th:classappend="${bw.type == 'event'} ? ' vb-bk-ic--ev' : ''"
+                 th:text="${bw.type == 'event'} ? '⏳' : '🎲'">🎲</div>
+            <div class="vb-bk-main">
+                <div class="vb-bk-id">
+                    <span th:text="${bw.bookingId}">BK-000</span>
+                    <span class="vb-tag" th:classappend="${bw.type == 'event'} ? ' vb-tag--ev' : ''"
+                          th:text="${bw.type == 'event'} ? 'event' : 'รายกล่อง'">—</span>
+                </div>
+                <div class="vb-bk-meta" th:text="${bw.agentName}">agent</div>
+                <div class="vb-bk-stat">
+                    <span th:text="${bw.pickedUpAt != null ? #temporals.format(bw.pickedUpAt, 'dd/MM HH:mm') : '—'}">—</span>
+                    →
+                    <span th:text="${bw.returnedAt != null ? #temporals.format(bw.returnedAt, 'dd/MM HH:mm') : 'ยังไม่คืน'}">—</span>
+                    <span th:if="${bw.late}" style="color:#fb923c">· คืนช้ากว่ากำหนด</span>
+                </div>
+            </div>
+            <div class="vb-bk-r">
+                <div class="vb-bk-clock"
+                     th:classappend="${bw.late} ? ' vb-over' : ''"
+                     th:text="${bw.minutes >= 60}
+                              ? ${bw.minutes / 60} + ' ชม. ' + ${bw.minutes % 60} + ' น.'
+                              : ${bw.minutes} + ' นาที'">—</div>
+                <div class="vb-bk-clock-k" th:text="${bw.returnedAt == null} ? 'ยังไม่คืน' : 'ยืมไป'">ยืมไป</div>
+            </div>
+        </div>
+
+        <!-- timeline ดิบ — เฉพาะบรรทัดที่อ้างถึงกล่องใบนี้ -->
+        <div th:if="${!h.timeline.isEmpty()}">
+            <div class="vb-sub" style="margin-top:1.6rem">
+                Timeline ที่ระบบบันทึก (booking_status_events)
+            </div>
+            <div class="vb-raw">
+                <div th:each="e : ${h.timeline}">
+                    <span class="ts" th:text="${#temporals.format(e.occurredAt, 'dd/MM HH:mm:ss')}">--:--</span>
+                    <span class="k"
+                          th:classappend="${#strings.contains(e.status,'MOVE')} ? ' mv'
+                                        : (${#strings.contains(e.status,'ANOMALY') or #strings.contains(e.status,'OVERDUE')} ? ' warn'
+                                        : (${#strings.contains(e.status,'CANCELLED') or #strings.contains(e.status,'LATE_EVENT')} ? ' off' : ''))"
+                          th:text="${e.status}">BK · STATUS</span>
+                    <span th:text="${e.note != null ? e.note : ''}"></span>
+                </div>
+            </div>
+        </div>
+</div>
+
+</body>
+</html>
