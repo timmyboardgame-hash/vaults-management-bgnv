@@ -149,16 +149,36 @@ public class VaultBoardService {
 
         // เก็บทุก cycle ที่อ้างถึงกล่องนี้ (จับคู่ด้วย epc ก่อน แล้ว serial)
         List<Borrow> borrows = new ArrayList<>();
+        List<TimelineEvent> timeline = new ArrayList<>();
         for (BoardBooking b : bookings) {
+            boolean ownsItem = false;
             for (Cycle c : b.cycles()) {
                 if (c.pending()) continue;
                 boolean isThisItem = c.matchKey() != null
                         && (c.matchKey().equals(vi.getRfidTag()) || c.matchKey().equals(vi.getSerialNumber()));
                 if (!isThisItem) continue;
+                ownsItem = true;
                 borrows.add(new Borrow(b.bookingId(), b.type(), b.agentName(),
                         c.pickedUpAt(), c.returnedAt(), c.minutes(), c.late()));
             }
+            if (!ownsItem) continue;
+
+            // event booking แตะหลายกล่อง → เอาเฉพาะบรรทัดที่อ้างกล่องนี้
+            // game booking ทั้งใบเป็นของกล่องนี้อยู่แล้ว → เอาทั้งหมด
+            for (TimelineEvent e : b.timeline()) {
+                boolean mentionsItem = e.note() != null
+                        && ((vi.getRfidTag() != null && e.note().contains(vi.getRfidTag()))
+                         || (vi.getSerialNumber() != null && e.note().contains(vi.getSerialNumber())));
+                if ("game".equals(b.type()) || mentionsItem) {
+                    timeline.add(new TimelineEvent(
+                            b.bookingId() + " · " + e.status(), e.occurredAt(), e.note()));
+                }
+            }
         }
+        timeline.sort((x, y) -> {
+            if (x.occurredAt() == null || y.occurredAt() == null) return 0;
+            return x.occurredAt().compareTo(y.occurredAt());
+        });
         borrows.sort((x, y) -> {
             if (x.pickedUpAt() == null || y.pickedUpAt() == null) return 0;
             return y.pickedUpAt().compareTo(x.pickedUpAt());   // ล่าสุดขึ้นก่อน
@@ -182,7 +202,8 @@ public class VaultBoardService {
                 total,
                 borrows.isEmpty() ? 0 : Math.round((double) total / borrows.size()),
                 lateCount,
-                borrows
+                borrows,
+                timeline
         ));
     }
 

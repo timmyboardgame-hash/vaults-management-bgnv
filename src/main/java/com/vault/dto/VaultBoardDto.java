@@ -85,7 +85,8 @@ public class VaultBoardDto {
         long totalMinutes,
         long avgMinutes,
         int lateCount,
-        List<Borrow> borrows         // ล่าสุดขึ้นก่อน
+        List<Borrow> borrows,        // ล่าสุดขึ้นก่อน
+        List<TimelineEvent> timeline // event ดิบที่เกี่ยวกับกล่องนี้ (เก่า → ใหม่)
     ) {}
 
     public record Board(

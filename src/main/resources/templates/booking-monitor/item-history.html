@@ -118,6 +118,24 @@
             </div>
         </div>
 
+        <!-- timeline ดิบ — เฉพาะบรรทัดที่อ้างถึงกล่องใบนี้ -->
+        <div th:if="${!h.timeline.isEmpty()}">
+            <div class="vb-sub" style="margin-top:1.6rem">
+                Timeline ที่ระบบบันทึก (booking_status_events)
+            </div>
+            <div class="vb-raw">
+                <div th:each="e : ${h.timeline}">
+                    <span class="ts" th:text="${#temporals.format(e.occurredAt, 'dd/MM HH:mm:ss')}">--:--</span>
+                    <span class="k"
+                          th:classappend="${#strings.contains(e.status,'MOVE')} ? ' mv'
+                                        : (${#strings.contains(e.status,'ANOMALY') or #strings.contains(e.status,'OVERDUE')} ? ' warn'
+                                        : (${#strings.contains(e.status,'CANCELLED') or #strings.contains(e.status,'LATE_EVENT')} ? ' off' : ''))"
+                          th:text="${e.status}">BK · STATUS</span>
+                    <span th:text="${e.note != null ? e.note : ''}"></span>
+                </div>
+            </div>
+        </div>
+
     </main>
 </div>
 
