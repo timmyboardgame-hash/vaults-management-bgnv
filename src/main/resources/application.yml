@@ -75,6 +75,11 @@ iot:
 session:
   item-ids: ${SESSION_ITEM_IDS:SESSION-PASS}
 
+# Vault Analytics — เครื่องมือ dev (สร้าง / ล้างข้อมูลทดสอบ) เปิดเฉพาะเครื่อง dev
+# ห้ามเปิดบน production — ปุ่มล้างข้อมูลลบทุกแถวที่รหัสขึ้นต้น SEED-
+analytics:
+  dev-tools: ${ANALYTICS_DEV_TOOLS:false}
+
 # Request/Response payload logging — dev debug เท่านั้น
 # log body เต็ม (รวม PIN) แต่ mask header credential — ควรตั้ง false ใน prod
 app:
