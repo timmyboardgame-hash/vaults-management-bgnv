@@ -11,4 +11,10 @@ public interface BookingStatusEventRepository extends JpaRepository<BookingStatu
 
     @Query("SELECT e FROM BookingStatusEvent e WHERE e.booking.id = :bookingId ORDER BY e.occurredAt ASC")
     List<BookingStatusEvent> findByBookingIdOrderByOccurredAtAsc(@Param("bookingId") String bookingId);
+
+    // งานสรุปสถิติ — นับ anomaly / late event ตามเวลาที่เกิด ไม่ผูกกับช่วงจองของ booking
+    @Query("SELECT e FROM BookingStatusEvent e JOIN FETCH e.booking b LEFT JOIN FETCH b.vault " +
+           "WHERE e.occurredAt >= :from AND e.occurredAt < :to")
+    List<BookingStatusEvent> findOccurredBetween(@Param("from") java.time.LocalDateTime from,
+                                                 @Param("to") java.time.LocalDateTime to);
 }

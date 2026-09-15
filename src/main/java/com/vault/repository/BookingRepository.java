@@ -54,4 +54,11 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +
            "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE','OVERDUE') AND b.deletedAt IS NULL")
     List<Booking> findOpenPastEnd(@Param("now") java.time.LocalDateTime now);
+
+    // งานสรุปสถิติ — booking ที่ช่วงจองซ้อนกับช่วงเวลาที่ขอ
+    // ไม่กรอง deletedAt: game booking ที่ CANCELLED ถูก soft-delete แต่ต้องนับในสถิติ
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item LEFT JOIN FETCH b.agent LEFT JOIN FETCH b.vault " +
+           "WHERE b.bookingTimeStart < :to AND b.bookingTimeEnd >= :from")
+    List<Booking> findForRollup(@Param("from") java.time.LocalDateTime from,
+                                @Param("to") java.time.LocalDateTime to);
 }
