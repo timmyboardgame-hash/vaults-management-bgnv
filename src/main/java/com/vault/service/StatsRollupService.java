@@ -33,6 +33,7 @@ import java.util.Set;
  *
  * รันตอนเที่ยงคืนผ่าน StatsRollupScheduler หรือสั่ง backfill เอง
  * แต่ละวัน: ลบของวันนั้นทั้ง 3 ตาราง แล้วคำนวณเขียนใหม่ในทรานแซกชันเดียว → รันซ้ำได้ผลเท่าเดิม
+ * วันนี้ที่ยังไม่จบวันใช้ preview() — คำนวณแบบเดียวกันแต่ไม่บันทึก
  *
  * การนับวัน (เวลาไทย):
  *   booking        → วันที่เริ่มช่วงจอง
@@ -49,6 +50,15 @@ public class StatsRollupService {
 
     public record DayResult(LocalDate date, int bookings, int cycles, int unpaired, int vaultRows, int itemRows) {}
 
+    /** ผลคำนวณของ 1 วันในรูป entity ที่ยังไม่บันทึก — ใช้ได้ทั้งเขียนลง DB และแสดงสดบนหน้าเว็บ */
+    public record Computation(LocalDate date, int bookings,
+                              List<DailyVaultStat> vaultStats,
+                              List<DailyItemStat> itemStats,
+                              List<BorrowRecord> records) {
+        public int cycles() { return records.size(); }
+        public int unpaired() { return vaultStats.stream().mapToInt(DailyVaultStat::getUnpairedMoves).sum(); }
+    }
+
     private final BookingRepository bookingRepository;
     private final BookingStatusEventRepository eventRepository;
     private final VaultRepository vaultRepository;
@@ -57,6 +67,7 @@ public class StatsRollupService {
     private final DailyVaultStatRepository dailyVaultStatRepository;
     private final DailyItemStatRepository dailyItemStatRepository;
     private final TransactionTemplate tx;
+    private final TransactionTemplate readOnlyTx;
 
     public StatsRollupService(BookingRepository bookingRepository,
                               BookingStatusEventRepository eventRepository,
@@ -76,6 +87,8 @@ public class StatsRollupService {
         // ใช้ TransactionTemplate แทน @Transactional — rollupRange เรียก rollupDay ในคลาสเดียวกัน
         // ซึ่ง @Transactional จะไม่ทำงานเพราะไม่ผ่าน proxy
         this.tx = new TransactionTemplate(txManager);
+        this.readOnlyTx = new TransactionTemplate(txManager);
+        this.readOnlyTx.setReadOnly(true);
     }
 
     /** คำนวณช่วงวันที่ (รวมทั้งสองปลาย) ทีละวัน — แต่ละวันเป็นทรานแซกชันของตัวเอง พังวันไหนไม่ลากวันอื่น */
@@ -88,20 +101,30 @@ public class StatsRollupService {
     }
 
     public DayResult rollupDay(LocalDate date) {
-        DayResult r = tx.execute(status -> compute(date));
+        DayResult r = tx.execute(status -> {
+            borrowRecordRepository.deleteByStatDate(date);
+            dailyVaultStatRepository.deleteByStatDate(date);
+            dailyItemStatRepository.deleteByStatDate(date);
+
+            Computation c = computeDay(date, LocalDateTime.now());
+            borrowRecordRepository.saveAll(c.records());
+            dailyVaultStatRepository.saveAll(c.vaultStats());
+            dailyItemStatRepository.saveAll(c.itemStats());
+            return new DayResult(date, c.bookings(), c.cycles(), c.unpaired(), c.vaultStats().size(), c.itemStats().size());
+        });
         log.info("[STATS] {} bookings={} cycles={} unpaired={} vaultRows={} itemRows={}",
                 r.date(), r.bookings(), r.cycles(), r.unpaired(), r.vaultRows(), r.itemRows());
         return r;
     }
 
-    private DayResult compute(LocalDate date) {
+    /** คำนวณโดยไม่บันทึก — หน้าเว็บใช้กับวันนี้ที่ยังไม่จบวันและยังไม่อยู่ในตารางสรุป */
+    public Computation preview(LocalDate date) {
+        return readOnlyTx.execute(status -> computeDay(date, LocalDateTime.now()));
+    }
+
+    private Computation computeDay(LocalDate date, LocalDateTime now) {
         LocalDateTime from = date.atStartOfDay();
         LocalDateTime to = date.plusDays(1).atStartOfDay();
-        LocalDateTime now = LocalDateTime.now();
-
-        borrowRecordRepository.deleteByStatDate(date);
-        dailyVaultStatRepository.deleteByStatDate(date);
-        dailyItemStatRepository.deleteByStatDate(date);
 
         Map<String, VaultAcc> vaults = new LinkedHashMap<>();
         Map<String, ItemAcc> items = new LinkedHashMap<>();
@@ -164,12 +187,10 @@ public class StatsRollupService {
             if (v != null) vault(vaults, v).countEvent(e.getStatus());
         }
 
-        borrowRecordRepository.saveAll(records);
-        dailyVaultStatRepository.saveAll(vaults.values().stream().map(a -> a.toEntity(date, now)).toList());
-        dailyItemStatRepository.saveAll(items.values().stream().map(a -> a.toEntity(date, now)).toList());
-
-        int unpaired = vaults.values().stream().mapToInt(a -> a.unpairedMoves).sum();
-        return new DayResult(date, bookingCount, records.size(), unpaired, vaults.size(), items.size());
+        return new Computation(date, bookingCount,
+                vaults.values().stream().map(a -> a.toEntity(date, now)).toList(),
+                items.values().stream().map(a -> a.toEntity(date, now)).toList(),
+                records);
     }
 
     private static VaultAcc vault(Map<String, VaultAcc> vaults, Vault v) {

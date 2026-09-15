@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="th">
+<head th:replace="~{fragments/layout :: head('Vault Analytics')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: topbar}"></div>
+
+<div class="app-shell">
+    <div th:replace="~{fragments/layout :: sidebar('vault-analytics')}"></div>
+
+    <main class="main-content">
+        <link rel="stylesheet" th:href="@{/css/vault-analytics.css}">
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Vault Analytics</h1>
+                <p class="page-subtitle">
+                    สถิติการใช้งานของตู้ย้อนหลัง · สรุปทุกคืน 00:05 น. · วันนี้คำนวณสด
+                    <span th:if="${p.computedAtLabel != null}"> · สรุปล่าสุด <span th:text="${p.computedAtLabel}">—</span></span>
+                </p>
+            </div>
+        </div>
+
+        <div class="va-flash" th:if="${devMessage != null}" th:text="${devMessage}">—</div>
+
+        <!-- ── filter — ทุกค่าอยู่ใน query string ── -->
+        <form class="va-bar" method="get" th:action="@{/vault-analytics}">
+            <input type="hidden" name="days" th:value="${p.filter.days}">
+            <input type="hidden" name="compare" th:value="${p.filter.compare}">
+            <div class="va-bar-g">
+                <span class="va-bar-k">ตู้</span>
+                <select name="vault" onchange="this.form.submit()" aria-label="เลือกตู้">
+                    <option value="" th:selected="${p.filter.vaultId == null}"
+                            th:text="'ทุกตู้ (' + ${p.vaultOptions.size()} + ')'">ทุกตู้</option>
+                    <option th:each="v : ${p.vaultOptions}" th:value="${v.vaultId}"
+                            th:selected="${v.vaultId == p.filter.vaultId}"
+                            th:text="${v.vaultId + ' · ' + v.vaultName}">vt-001</option>
+                </select>
+            </div>
+            <div class="va-bar-g">
+                <span class="va-bar-k">ช่วงเวลา</span>
+                <div class="va-seg" role="group" aria-label="ช่วงเวลา">
+                    <a th:each="d : ${periods}"
+                       th:href="@{/vault-analytics(vault=${p.filter.vaultId}, days=${d}, compare=${p.filter.compare})}"
+                       th:classappend="${d == p.filter.days} ? 'on'"
+                       th:text="${d == 30} ? '30 วัน' : (${d == 90} ? '90 วัน' : (${d == 365} ? '12 เดือน' : '3 ปี'))">90 วัน</a>
+                </div>
+            </div>
+            <a class="va-check"
+               th:href="@{/vault-analytics(vault=${p.filter.vaultId}, days=${p.filter.days}, compare=${!p.filter.compare})}">
+                <i th:class="${p.filter.compare} ? 'bi bi-check-square-fill' : 'bi bi-square'"></i>
+                เทียบช่วงก่อนหน้า
+            </a>
+            <span class="va-spacer"></span>
+            <span class="va-range" th:text="${p.filter.fromLabel + ' – ' + p.filter.toLabel}">—</span>
+        </form>
+
+        <div class="va-scope">
+            <div>
+                <h2 th:text="${p.scopeName}">ทุกตู้</h2>
+                <div class="va-scope-meta" th:text="${p.scopeMeta}">—</div>
+            </div>
+            <a class="btn btn-sm btn-ghost" th:if="${p.filter.vaultId != null}"
+               th:href="@{/vault-analytics(days=${p.filter.days}, compare=${p.filter.compare})}">← ดูทุกตู้</a>
+        </div>
+
+        <section class="va-panel mb-3" th:unless="${p.hasData}">
+            <div class="va-panel-h"><h3>ยังไม่มีสถิติในช่วงนี้</h3></div>
+            <p class="va-why mb-0">
+                สถิติมาจากตารางสรุปที่งานรายคืนสร้าง — ถ้าเพิ่งเปิดใช้ ให้กด “คำนวณย้อนหลัง” ด้านล่าง
+                <span th:if="${devTools}">หรือสร้างข้อมูลทดสอบก่อน</span>
+            </p>
+        </section>
+
+        <!-- ── KPI ── -->
+        <div class="va-kpis">
+            <div class="va-kpi" th:each="k : ${p.usage.kpis}">
+                <div class="va-kpi-k" th:text="${k.label}">—</div>
+                <div class="va-kpi-v"><span th:text="${k.value}">0</span><small th:text="${k.unit}">—</small></div>
+                <div class="va-delta" th:if="${k.deltaLabel != null}"
+                     th:classappend="${k.deltaClass}" th:text="${k.deltaLabel}">—</div>
+                <div th:attr="data-spark=${k.sparkCsv}"></div>
+            </div>
+        </div>
+
+        <div class="va-rows">
+
+            <section class="va-panel va-chart">
+                <div class="va-panel-h">
+                    <h3>ปริมาณการใช้งาน</h3>
+                    <span class="va-note" th:text="${p.filter.granularityLabel}">รายวัน</span>
+                </div>
+                <p class="va-why">
+                    แยก <b>booking</b> (คนจอง) ออกจาก <b>รอบหยิบ-คืน</b> (ของออกจากตู้จริง) เพราะ event booking หนึ่งใบหยิบหลายรอบ ·
+                    ตู้หยิบได้ทีละกล่อง ทุกรอบจึงเรียงต่อกัน เพดานของตู้หนึ่งใบคือ 12 ชั่วโมงต่อวัน
+                </p>
+                <div id="vaTrend"></div>
+                <div class="va-legend">
+                    <span style="color:#a78bfa"><i></i>รอบหยิบ-คืน (ของออกจากตู้)</span>
+                    <span style="color:#38bdf8"><i></i>booking ทั้งหมด</span>
+                    <span style="color:#fbbf24"><i></i>เฉพาะ event booking</span>
+                </div>
+            </section>
+
+            <div class="va-two">
+                <section class="va-panel">
+                    <div class="va-panel-h"><h3>ชั่วโมงที่ตู้ถูกใช้</h3><span class="va-note">นับตามเวลาที่หยิบ</span></div>
+                    <p class="va-why">ใช้วางแผนงานที่ต้องแตะตู้ — เติมของ อัป firmware ซ่อมบำรุง ควรทำในช่องที่มืด ไม่ใช่ช่วงที่คนกำลังใช้</p>
+                    <div class="va-heat"
+                         th:style="'grid-template-columns: 24px repeat(' + ${p.usage.hours.size()} + ', minmax(0, 1fr))'">
+                        <div></div>
+                        <div class="va-heat-lx" th:each="h, st : ${p.usage.hours}"
+                             th:text="${st.index % 2 == 0} ? ${h} : ''">10</div>
+                        <th:block th:each="row : ${p.usage.heat}">
+                            <div class="va-heat-ly" th:text="${row.dayLabel}">จ</div>
+                            <div class="va-heat-c" th:each="c : ${row.cells}"
+                                 th:style="'background: rgba(124,58,237,' + ${c.alpha} + ')'"
+                                 th:title="${row.dayLabel + ' ' + c.hour + ':00 — ' + c.cycles + ' รอบ'}"></div>
+                        </th:block>
+                    </div>
+                    <div class="va-heat-scale">
+                        <span>น้อย</span>
+                        <i style="background:rgba(124,58,237,.10)"></i><i style="background:rgba(124,58,237,.34)"></i>
+                        <i style="background:rgba(124,58,237,.60)"></i><i style="background:rgba(124,58,237,.88)"></i>
+                        <span>มาก</span>
+                        <span>· สูงสุด <b th:text="${p.usage.heatPeak}">—</b></span>
+                    </div>
+                </section>
+
+                <section class="va-panel">
+                    <div class="va-panel-h"><h3>กล่องไหนถูกหยิบบ่อย</h3><span class="va-note">เรียงตามชั่วโมงที่ถูกยืม</span></div>
+                    <p class="va-why">
+                        อ้างอิงด้วย <code>serial_number</code> ของกล่อง — เกมเดียวกันมีได้หลายกล่อง
+                        และ <code>slot_id</code> เลิกกรอกตั้งแต่ย้ายไปผูกด้วย RFID
+                    </p>
+                    <div class="va-bars" th:unless="${p.usage.topBoxes.isEmpty()}">
+                        <div class="va-bar-row" th:each="b : ${p.usage.topBoxes}">
+                            <div class="va-bar-n"><span th:text="${b.label}">—</span><em th:text="${b.sub}">—</em></div>
+                            <div class="va-track"><span th:style="'width:' + ${b.widthPct} + '%'"></span></div>
+                            <div class="va-bar-v" th:text="${b.valueLabel}">—</div>
+                        </div>
+                    </div>
+                    <p class="va-empty" th:if="${p.usage.topBoxes.isEmpty()}">ยังไม่มีการยืมในช่วงนี้</p>
+                </section>
+            </div>
+
+            <div class="va-two">
+                <section class="va-panel">
+                    <div class="va-panel-h"><h3>แต่ละรอบยืมนานแค่ไหน</h3></div>
+                    <p class="va-why">
+                        รอบที่สั้นกว่า 5 นาทีมักไม่ใช่การเล่นจริง — เปิดดูแล้วเอาคืน หรือ RFID อ่านซ้ำจนกลายเป็นสองรอบ
+                        ซึ่งอย่างหลังเป็นบั๊กของเรา ไม่ใช่พฤติกรรมลูกค้า
+                    </p>
+                    <div class="va-bars">
+                        <div class="va-bar-row" th:each="b : ${p.usage.durations}">
+                            <div class="va-bar-n" th:text="${b.label}">—</div>
+                            <div class="va-track">
+                                <span th:style="'width:' + ${b.widthPct} + '%'" th:classappend="${b.warn} ? 'warn'"></span>
+                            </div>
+                            <div class="va-bar-v" th:text="${b.valueLabel}">—</div>
+                        </div>
+                    </div>
+                    <p class="va-note mt-2 mb-0" th:if="${p.usage.shortCycleNote != null}" th:text="${p.usage.shortCycleNote}">—</p>
+                </section>
+
+                <section class="va-panel">
+                    <div class="va-panel-h"><h3>หนึ่ง session หยิบกี่กล่อง</h3><span class="va-note">เฉพาะ event booking</span></div>
+                    <p class="va-why">
+                        ตัวเลขนี้คือตัวคูณของ storage — กำหนดว่า event booking หนึ่งใบสร้างกี่แถวใน
+                        <code>booking_status_events</code> และภาระ MQTT ต่อ session
+                    </p>
+                    <div class="va-bars">
+                        <div class="va-bar-row" th:each="b : ${p.usage.perSession}">
+                            <div class="va-bar-n" th:text="${b.label}">—</div>
+                            <div class="va-track"><span th:style="'width:' + ${b.widthPct} + '%'"></span></div>
+                            <div class="va-bar-v" th:text="${b.valueLabel}">—</div>
+                        </div>
+                    </div>
+                    <p class="va-note mt-2 mb-0" th:text="${p.usage.perSessionNote}">—</p>
+                </section>
+            </div>
+
+            <section class="va-panel">
+                <div class="va-panel-h"><h3>ตู้ทั้งหมด</h3><span class="va-note">กดรหัสตู้เพื่อกรองทั้งหน้า</span></div>
+                <p class="va-why">
+                    เรียงตามรอบหยิบ-คืน · กราฟจิ๋วปรับสเกลกับตัวเอง บอกได้แค่<b>รูปทรง</b> ไม่ใช่ขนาด —
+                    ถ้าจะเทียบข้ามตู้ให้ดูตัวเลขข้างๆ
+                </p>
+                <div class="va-tw">
+                    <table class="va-table">
+                        <thead>
+                        <tr>
+                            <th class="sev">ตู้</th>
+                            <th>ชื่อ</th>
+                            <th>การใช้งาน</th>
+                            <th class="n">booking</th>
+                            <th class="n">รอบหยิบ-คืน</th>
+                            <th class="n">เวลาที่ตู้ไม่ว่าง</th>
+                            <th class="n">ยืมเฉลี่ย</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="v : ${p.usage.vaults}" th:class="'sev-' + ${v.severity}">
+                            <td class="sev">
+                                <a th:href="@{/vault-analytics(vault=${v.vaultId}, days=${p.filter.days}, compare=${p.filter.compare})}"
+                                   th:text="${v.vaultId}">vt-001</a>
+                            </td>
+                            <td th:text="${v.vaultName}">—</td>
+                            <td><div th:attr="data-spark=${v.sparkCsv}" data-color="#a78bfa"></div></td>
+                            <td class="n" th:text="${#numbers.formatInteger(v.bookings, 1, 'COMMA')}">0</td>
+                            <td class="n" th:text="${#numbers.formatInteger(v.cycles, 1, 'COMMA')}">0</td>
+                            <td class="n" th:classappend="'va-' + ${v.severity}"
+                                th:text="${#numbers.formatDecimal(v.busyPct, 1, 1) + '%'}">0%</td>
+                            <td class="n" th:text="${v.avgMinutes + ' น.'}">0</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ── คำนวณใหม่ ── -->
+        <div class="va-dev">
+            <span class="va-dev-k" style="color:var(--vm-text-2)">คำนวณใหม่</span>
+            <p>สั่งคำนวณสถิติย้อนหลังเท่าช่วงที่เลือก — ใช้หลังแก้วิธีนับ หรือเมื่อกล่องคืนช้าเกินรอบ 3 วันของงานรายคืน · รันซ้ำได้ปลอดภัย</p>
+            <form method="post" th:action="@{/vault-analytics/backfill(days=${p.filter.days})}">
+                <button class="btn btn-sm btn-ghost" type="submit">คำนวณย้อนหลัง <span th:text="${p.filter.days}">90</span> วัน</button>
+            </form>
+        </div>
+
+        <div class="va-dev" th:if="${devTools}">
+            <span class="va-dev-k">Dev tools</span>
+            <p>ข้อมูลทดสอบรหัส <code>SEED-</code> — สร้างของดิบย้อนหลัง 90 วัน แล้วคำนวณสถิติต่อทันที · ล้างได้ทั้งชุด</p>
+            <form method="post" th:action="@{/vault-analytics/dev/seed(days=90)}">
+                <button class="btn btn-sm btn-ghost" type="submit">สร้างข้อมูลทดสอบ</button>
+            </form>
+            <form method="post" th:action="@{/vault-analytics/dev/clear}"
+                  onsubmit="return confirm('ลบข้อมูลทดสอบ SEED- ทั้งหมดและสถิติที่คำนวณจากมัน?')">
+                <button class="btn btn-sm btn-ghost" type="submit">ล้างข้อมูลทดสอบ</button>
+            </form>
+        </div>
+
+        <script th:inline="javascript">
+            window.VA_TREND = /*[[${p.usage.trend}]]*/ [];
+        </script>
+        <script th:src="@{/js/vault-analytics.js}"></script>
+    </main>
+</div>
+
+</body>
+</html>
