@@ -89,7 +89,7 @@ public class VaultStatsService {
     /** ยอดรวมของ 1 ช่วง — ทั้งช่วง / ช่วงก่อนหน้า / ถังในกราฟ / ต่อตู้ */
     private static final class Agg {
         long bookings, eventBookings, cycles, busyMinutes, vaultDays;
-        long noAck, lateCycles, unpaired, lateEvents;
+        long noAck, lateCycles, unpaired, lateEvents, cancelled;
         final long[] anomalies = new long[ANOMALY_TYPES.length];   // เรียงตาม ANOMALY_TYPES
 
         void add(DailyVaultStat s) {
@@ -99,6 +99,7 @@ public class VaultStatsService {
             busyMinutes += s.getBusyMinutes();
             vaultDays++;   // 1 แถว = ตู้ 1 ใบ × 1 วัน — ตู้ที่เพิ่งติดตั้งกลางช่วงจึงไม่ถ่วงค่าเฉลี่ย
             noAck += s.getBookingsNoAck();
+            cancelled += s.getBookingsCancelled();
             lateCycles += s.getLateCycles();
             unpaired += s.getUnpairedMoves();
             lateEvents += s.getLateEvents();
@@ -113,6 +114,8 @@ public class VaultStatsService {
         double avgMinutes() { return cycles == 0 ? 0 : (double) busyMinutes / cycles; }
         double noAckPct() { return bookings == 0 ? 0 : noAck * 100.0 / bookings; }
         double latePct() { return cycles == 0 ? 0 : lateCycles * 100.0 / cycles; }
+        long activeBookings() { return bookings - cancelled; }   // ไม่รวมที่ยกเลิก
+        double cancelPct() { return bookings == 0 ? 0 : cancelled * 100.0 / bookings; }
         long anomalyTotal() { long t = 0; for (long a : anomalies) t += a; return t; }
     }
 
@@ -252,9 +255,14 @@ public class VaultStatsService {
                         e.getValue().bookings, e.getValue().eventBookings, e.getValue().cycles))
                 .toList();
 
+        // ยอดรวมกับยอดที่ไม่รวมยกเลิกต้องเห็นคู่กัน — ยอดรวมบอกความต้องการใช้ตู้ ยอดไม่รวมยกเลิกบอกงานที่ตู้ทำจริง
         List<Kpi> kpis = List.of(
                 kpi("Booking ทั้งหมด", n(total.bookings), "ใบ",
-                        total.bookings, prev.bookings, compare, hasPrev, false, series, a -> a.bookings),
+                        total.bookings, prev.bookings, compare, hasPrev, false, series, a -> a.bookings)
+                        .withNote("ยกเลิก " + n(total.cancelled) + " ใบ · " + dec(total.cancelPct()) + "%"),
+                kpi("Booking ไม่รวมยกเลิก", n(total.activeBookings()), "ใบ",
+                        total.activeBookings(), prev.activeBookings(), compare, hasPrev, false, series,
+                        a -> a.activeBookings()),
                 kpi("รอบหยิบ-คืน", n(total.cycles), "รอบ",
                         total.cycles, prev.cycles, compare, hasPrev, false, series, a -> a.cycles),
                 kpi("เวลาที่ตู้ไม่ว่าง", dec(total.busyPct()), "%",
@@ -393,7 +401,7 @@ public class VaultStatsService {
                     .collect(Collectors.joining(","));
             double busy = a.busyPct();
             String severity = busy >= 55 ? "ok" : busy >= 30 ? "warn" : "bad";
-            return new VaultRow(v.getVaultId(), v.getVaultName(), a.bookings, a.cycles, busy,
+            return new VaultRow(v.getVaultId(), v.getVaultName(), a.bookings, a.cancelled, a.cycles, busy,
                     Math.round(a.avgMinutes()), severity, spark);
         }).sorted(Comparator.comparingLong(VaultRow::cycles).reversed()).toList();
 
@@ -576,7 +584,7 @@ public class VaultStatsService {
         String spark = series.stream()
                 .map(a -> String.format(Locale.ROOT, "%.2f", f.applyAsDouble(a)))
                 .collect(Collectors.joining(","));
-        return new Kpi(label, value, unit, cls, text, spark);
+        return new Kpi(label, value, unit, cls, text, spark, null);
     }
 
     private static void addBox(Map<String, long[]> totals, Map<String, String[]> info,

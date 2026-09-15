@@ -26,7 +26,9 @@
 .va-scope-meta { font-size: 0.74rem; color: var(--vm-muted); margin-top: 0.15rem; }
 
 /* ── KPI ── */
-.va-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem; margin-bottom: 1.2rem; }
+/* auto-fit — แท็บการใช้งานมี 5 ใบ แท็บความผิดปกติมี 4 ใบ ใช้ grid เดียวกันได้ */
+.va-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.7rem; margin-bottom: 1.2rem; }
+.va-kpi-note { font-size: 0.68rem; color: var(--vm-muted); margin-top: 0.05rem; font-variant-numeric: tabular-nums; }
 .va-kpi { background: var(--vm-surface); border: 1px solid var(--vm-border); border-radius: var(--vm-radius);
           padding: 0.8rem 0.9rem 0.55rem; min-width: 0; }
 .va-kpi-k { font-size: 0.63rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vm-muted);
@@ -143,11 +145,11 @@
 .va-pager { display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin-top: 0.9rem; }
 
 @media (max-width: 1100px) {
-  .va-kpis { grid-template-columns: repeat(2, 1fr); }
   .va-two { grid-template-columns: 1fr; }
 }
 @media (max-width: 575.98px) {
   .va-kpis { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .va-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* ใบสุดท้ายไม่ค้างอยู่ครึ่งแถว */
   .va-kpi-v { font-size: 1.25rem; }
   .va-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
   .va-bar-row .va-track { grid-column: 1 / -1; grid-row: 2; }

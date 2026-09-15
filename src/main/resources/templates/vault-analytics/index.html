@@ -88,6 +88,7 @@
                 <div class="va-kpi" th:each="k : ${p.usage.kpis}">
                     <div class="va-kpi-k" th:text="${k.label}">—</div>
                     <div class="va-kpi-v"><span th:text="${k.value}">0</span><small th:text="${k.unit}">—</small></div>
+                    <div class="va-kpi-note" th:if="${k.note != null}" th:text="${k.note}">—</div>
                     <div class="va-delta" th:if="${k.deltaLabel != null}"
                          th:classappend="${k.deltaClass}" th:text="${k.deltaLabel}">—</div>
                     <div th:attr="data-spark=${k.sparkCsv}"></div>
@@ -203,7 +204,7 @@
                                 <th class="sev">ตู้</th>
                                 <th>ชื่อ</th>
                                 <th>การใช้งาน</th>
-                                <th class="n">booking</th>
+                                <th class="n">booking รวม</th>
                                 <th class="n">รอบหยิบ-คืน</th>
                                 <th class="n">เวลาที่ตู้ไม่ว่าง</th>
                                 <th class="n">ยืมเฉลี่ย</th>
@@ -217,7 +218,10 @@
                                 </td>
                                 <td th:text="${v.vaultName}">—</td>
                                 <td><div th:attr="data-spark=${v.sparkCsv}" data-color="#a78bfa"></div></td>
-                                <td class="n" th:text="${#numbers.formatInteger(v.bookings, 1, 'COMMA')}">0</td>
+                                <td class="n">
+                                    <span th:text="${#numbers.formatInteger(v.bookings, 1, 'COMMA')}">0</span>
+                                    <div class="va-sub" th:if="${v.cancelled > 0}" th:text="'ยกเลิก ' + ${v.cancelled}">ยกเลิก 0</div>
+                                </td>
                                 <td class="n" th:text="${#numbers.formatInteger(v.cycles, 1, 'COMMA')}">0</td>
                                 <td class="n" th:classappend="'va-' + ${v.severity}"
                                     th:text="${#numbers.formatDecimal(v.busyPct, 1, 1) + '%'}">0%</td>

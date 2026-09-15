@@ -30,8 +30,11 @@ public class VaultAnalyticsDto {
         String unit,
         String deltaClass,
         String deltaLabel,
-        String sparkCsv
-    ) {}
+        String sparkCsv,
+        String note              // บรรทัดเสริมใต้ตัวเลข — null = ไม่มี
+    ) {
+        public Kpi withNote(String n) { return new Kpi(label, value, unit, deltaClass, deltaLabel, sparkCsv, n); }
+    }
 
     public record TrendPoint(String label, long bookings, long eventBookings, long cycles) {}
 
@@ -44,7 +47,8 @@ public class VaultAnalyticsDto {
     public record VaultRow(
         String vaultId,
         String vaultName,
-        long bookings,
+        long bookings,           // รวมที่ยกเลิก
+        long cancelled,
         long cycles,
         double busyPct,
         long avgMinutes,
