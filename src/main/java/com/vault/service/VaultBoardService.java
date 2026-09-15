@@ -205,6 +205,15 @@ public class VaultBoardService {
         ));
     }
 
+    /**
+     * booking 1 ใบในรูปแบบของหน้า board — ใช้เปิด timeline จากหน้าอื่น (Vault Analytics)
+     * รวมใบที่ถูก soft-delete ด้วย เพราะ booking ที่ยกเลิกถูกตั้ง deleted_at แต่ยังต้องเปิดดูได้
+     */
+    public Optional<BoardBooking> getBookingIncludingDeleted(String bookingId) {
+        return bookingRepository.findAllByBookingIdIncludingDeleted(bookingId).stream().findFirst()
+                .map(b -> toBoardBooking(b, LocalDateTime.now()));
+    }
+
     // ── booking → board row (พร้อม cycles + timeline) ──────────────────────────
     private BoardBooking toBoardBooking(Booking b, LocalDateTime now) {
         boolean isEvent = cycleExtractor.isEvent(b);

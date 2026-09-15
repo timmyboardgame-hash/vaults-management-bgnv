@@ -1,0 +1,5 @@
+<!-- timeline ของ booking 1 ใบ — โหลดผ่าน HTMX เข้าหน้า Vault Analytics
+     เรียก bkSheet จาก template ชั้นบนสุดแบบเดียวกับ board.html ไม่ซ้อนใน fragment อื่น -->
+<th:block xmlns:th="http://www.thymeleaf.org">
+    <div th:replace="~{booking-monitor/board-parts :: bkSheet(${bk})}"></div>
+</th:block>

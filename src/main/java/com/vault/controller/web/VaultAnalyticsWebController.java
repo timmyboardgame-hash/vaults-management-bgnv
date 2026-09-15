@@ -2,11 +2,13 @@ package com.vault.controller.web;
 
 import com.vault.service.StatsRollupService;
 import com.vault.service.StatsRollupService.DayResult;
+import com.vault.service.VaultBoardService;
 import com.vault.service.VaultStatsService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,26 +25,45 @@ public class VaultAnalyticsWebController {
 
     private final StatsRollupService rollupService;
     private final VaultStatsService statsService;
+    private final VaultBoardService vaultBoardService;
     private final boolean devTools;
 
     public VaultAnalyticsWebController(StatsRollupService rollupService,
                                        VaultStatsService statsService,
+                                       VaultBoardService vaultBoardService,
                                        @Value("${analytics.dev-tools:false}") boolean devTools) {
         this.rollupService = rollupService;
         this.statsService = statsService;
+        this.vaultBoardService = vaultBoardService;
         this.devTools = devTools;
     }
 
-    /** filter อยู่ใน query string ทั้งหมด — ลิงก์ที่ส่งต่อให้คนอื่นเปิดแล้วเห็นหน้าเดียวกัน */
+    /** filter และแท็บอยู่ใน query string ทั้งหมด — ลิงก์ที่ส่งต่อให้คนอื่นเปิดแล้วเห็นหน้าเดียวกัน */
     @GetMapping
     public String page(@RequestParam(required = false) String vault,
                        @RequestParam(defaultValue = "90") int days,
                        @RequestParam(defaultValue = "true") boolean compare,
+                       @RequestParam(defaultValue = "use") String tab,
+                       @RequestParam(defaultValue = "all") String bk,
+                       @RequestParam(defaultValue = "0") int page,
                        Model model) {
-        model.addAttribute("p", statsService.build(vault, days, compare));
+        model.addAttribute("p", statsService.build(vault, days, compare, tab, bk, page));
         model.addAttribute("periods", VaultStatsService.PERIODS);
+        model.addAttribute("bookingFilters", VaultStatsService.BOOKING_FILTERS);
         model.addAttribute("devTools", devTools);
         return "vault-analytics/index";
+    }
+
+    /**
+     * timeline ของ booking 1 ใบ — ใช้ fragment เดียวกับหน้า Vault Board ผ่าน template ชั้นบนสุด
+     * (เรียก fragment ที่มี parameter ซ้อนใน fragment อีกชั้นเคยพังด้วย synthetic parameters)
+     */
+    @GetMapping("/booking/{bookingId}/sheet")
+    public String bookingSheet(@PathVariable String bookingId, Model model) {
+        return vaultBoardService.getBookingIncludingDeleted(bookingId).map(bk -> {
+            model.addAttribute("bk", bk);
+            return "vault-analytics/booking-sheet";
+        }).orElse("vault-analytics/booking-sheet-empty");
     }
 
     /**

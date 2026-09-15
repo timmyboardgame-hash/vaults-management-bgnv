@@ -23,12 +23,12 @@ public class VaultAnalyticsDto {
         String granularityLabel
     ) {}
 
-    /** ตัวเลขหลัก 1 ใบ — deltaLabel null = ไม่ได้เปิดเทียบช่วงก่อน */
+    /** ตัวเลขหลัก 1 ใบ — deltaLabel null = ไม่ได้เปิดเทียบช่วงก่อน · deltaClass up = ดีขึ้น, down = แย่ลง */
     public record Kpi(
         String label,
         String value,
         String unit,
-        String deltaClass,       // up / down / flat
+        String deltaClass,
         String deltaLabel,
         String sparkCsv
     ) {}
@@ -66,13 +66,67 @@ public class VaultAnalyticsDto {
         List<VaultRow> vaults
     ) {}
 
+    // ── แท็บความผิดปกติ ──────────────────────────────────────────────────────
+    public record ProblemPoint(String label, long anomalies, long noAck, long unpaired, long lateEvents) {}
+
+    /** ปัญหาที่ยังค้างอยู่ตอนนี้ — ต้องมีคนไปแตะ ระบบปิดเองไม่ได้ */
+    public record Issue(String kind, String severity, String bookingId, String vaultId, String age, String hint) {}
+
+    public record VaultIssueRow(
+        String vaultId,
+        String vaultName,
+        long bookings,
+        String noAckPct,
+        long unpaired,
+        long lateEvents,
+        long anomalies,
+        String severity
+    ) {}
+
+    public record Problems(
+        List<Kpi> kpis,
+        List<ProblemPoint> trend,
+        List<BarRow> anomalies,
+        List<Issue> openIssues,
+        int openIssueTotal,
+        List<VaultIssueRow> vaults
+    ) {}
+
+    // ── แท็บ Booking ย้อนหลัง ─────────────────────────────────────────────────
+    public record Flag(String label, String tone) {}   // tone: bad / warn / info
+
+    public record BookingRow(
+        String bookingId,
+        String type,             // event / game
+        String vaultId,
+        String startLabel,
+        String windowLabel,
+        int cycles,
+        long totalMinutes,
+        List<Flag> flags,
+        String status,
+        boolean deleted
+    ) {}
+
+    public record BookingPage(
+        String filter,           // all / event / game / flagged
+        List<BookingRow> rows,
+        long total,
+        int page,
+        int pageCount,
+        String rangeLabel
+    ) {}
+
     public record Page(
+        String tab,              // use / problems / bookings
         Filter filter,
         List<VaultOption> vaultOptions,
         String scopeName,
         String scopeMeta,
         String computedAtLabel,  // สรุปล่าสุดเมื่อไหร่ — null = ยังไม่เคยคำนวณ
         boolean hasData,
-        Usage usage
+        Usage usage,             // มีเฉพาะแท็บที่เปิดอยู่ — คำนวณแค่แท็บเดียวต่อครั้ง
+        Problems problems,
+        BookingPage bookings
     ) {}
 }

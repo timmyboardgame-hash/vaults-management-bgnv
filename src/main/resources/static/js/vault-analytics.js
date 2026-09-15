@@ -96,6 +96,19 @@
         { pts: trend.map(function (p) { return p.eventBookings; }), color: COLORS.event, width: 1.5 }
       ], trend.map(function (p) { return p.label; }));
     }
+
+    /* แท็บความผิดปกติ — ชุดแรก (anomaly รวม) มีพื้นที่ใต้เส้น */
+    var problems = window.VA_PROBLEM_TREND || [];
+    var pel = document.getElementById("vaProblemTrend");
+    if (pel && problems.length) {
+      lineChart(pel, [
+        { pts: problems.map(function (p) { return p.anomalies; }), color: "#fb923c" },
+        { pts: problems.map(function (p) { return p.noAck; }), color: "#f87171", width: 1.7 },
+        { pts: problems.map(function (p) { return p.unpaired; }), color: "#fbbf24", width: 1.7 },
+        { pts: problems.map(function (p) { return p.lateEvents; }), color: "#38bdf8", width: 1.5 }
+      ], problems.map(function (p) { return p.label; }));
+    }
+
     document.querySelectorAll("[data-spark]").forEach(spark);
   }
 

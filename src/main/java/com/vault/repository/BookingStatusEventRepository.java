@@ -17,4 +17,8 @@ public interface BookingStatusEventRepository extends JpaRepository<BookingStatu
            "WHERE e.occurredAt >= :from AND e.occurredAt < :to")
     List<BookingStatusEvent> findOccurredBetween(@Param("from") java.time.LocalDateTime from,
                                                  @Param("to") java.time.LocalDateTime to);
+
+    // หน้า Booking ย้อนหลัง — โหลด event ของทั้งหน้าในคำสั่งเดียว แทนการยิงทีละใบ
+    @Query("SELECT e FROM BookingStatusEvent e WHERE e.booking.id IN :bookingIds ORDER BY e.occurredAt ASC")
+    List<BookingStatusEvent> findByBookingIds(@Param("bookingIds") java.util.Collection<String> bookingIds);
 }

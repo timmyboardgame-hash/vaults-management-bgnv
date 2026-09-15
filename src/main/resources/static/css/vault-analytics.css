@@ -99,6 +99,49 @@
 .va-dev p { margin: 0; font-size: 0.74rem; color: var(--vm-muted); flex: 1; min-width: 220px; }
 .va-dev form { margin: 0; }
 
+/* ── tabs ── */
+.va-tabs { display: flex; gap: 0.1rem; border-bottom: 1px solid var(--vm-border-2); margin-bottom: 1.1rem; overflow-x: auto; }
+.va-tabs a { font-size: 0.82rem; font-weight: 600; color: var(--vm-muted); text-decoration: none; white-space: nowrap;
+             padding: 0.5rem 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.va-tabs a:hover { color: var(--vm-text-2); }
+.va-tabs a.on { color: #c4b5fd; border-bottom-color: var(--vm-violet); }
+.va-tabs a:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
+
+/* ── problems tab ── */
+.va-track span.bad { background: #ef4444; }
+.va-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--vm-text); cursor: pointer;
+           font-variant-numeric: tabular-nums; text-align: left; }
+.va-link:hover { color: #c4b5fd; }
+.va-link:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; border-radius: 3px; }
+.va-sub { font-size: 0.7rem; color: var(--vm-muted); }
+.va-callout { border: 1px dashed var(--vm-border-2); border-radius: var(--vm-radius); padding: 0.7rem 0.9rem;
+              font-size: 0.75rem; color: var(--vm-muted); }
+.va-callout b { color: var(--vm-text-2); }
+.va-callout code { font-size: 0.92em; background: var(--vm-input); padding: 0 0.3rem; border-radius: 3px; color: var(--vm-text-2); }
+
+/* ── booking history tab ── */
+.va-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.va-chips a { font-size: 0.74rem; font-weight: 600; color: var(--vm-muted); text-decoration: none; border: 1px solid var(--vm-border-2);
+              border-radius: 999px; padding: 0.22rem 0.7rem; }
+.va-chips a:hover { color: var(--vm-text-2); }
+.va-chips a.on { background: var(--vm-violet-soft); border-color: var(--vm-violet-ring); color: #c4b5fd; }
+.va-bk-row { cursor: pointer; }
+/* รหัส booking / ตู้ / เวลา ห้ามตัดบรรทัด อ่านไล่แนวตั้งไม่ได้ · ตารางอยู่ใน .va-tw จึง scroll ในกล่องแทนการดันหน้า
+   ยกเว้นคอลัมน์ธง — booking ที่มีหลายปัญหาต้องขึ้นบรรทัดใหม่ได้ */
+.va-bk-row td:not(.va-flags) { white-space: nowrap; }
+.va-bk-row:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
+.va-table tr.sev-ev .sev { border-left-color: var(--vm-violet); }
+.va-mono { font-variant-numeric: tabular-nums; font-size: 0.74rem; }
+.va-type { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.08rem 0.35rem;
+           border-radius: 4px; background: var(--vm-input); color: var(--vm-muted); }
+.va-type.event { background: var(--vm-violet-soft); color: #a78bfa; }
+.va-flag { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 999px;
+           margin: 0 0.2rem 0.2rem 0; white-space: nowrap; }
+.va-flag.bad { background: rgba(239,68,68,.15); color: #f87171; }
+.va-flag.warn { background: rgba(245,158,11,.15); color: #fbbf24; }
+.va-flag.info { background: rgba(56,189,248,.12); color: #7dd3fc; }
+.va-pager { display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin-top: 0.9rem; }
+
 @media (max-width: 1100px) {
   .va-kpis { grid-template-columns: repeat(2, 1fr); }
   .va-two { grid-template-columns: 1fr; }

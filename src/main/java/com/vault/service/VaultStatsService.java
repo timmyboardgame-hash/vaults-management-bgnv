@@ -1,27 +1,42 @@
 package com.vault.service;
 
 import com.vault.dto.VaultAnalyticsDto.BarRow;
+import com.vault.dto.VaultAnalyticsDto.BookingPage;
+import com.vault.dto.VaultAnalyticsDto.BookingRow;
 import com.vault.dto.VaultAnalyticsDto.Filter;
+import com.vault.dto.VaultAnalyticsDto.Flag;
 import com.vault.dto.VaultAnalyticsDto.HeatCell;
 import com.vault.dto.VaultAnalyticsDto.HeatRow;
+import com.vault.dto.VaultAnalyticsDto.Issue;
 import com.vault.dto.VaultAnalyticsDto.Kpi;
 import com.vault.dto.VaultAnalyticsDto.Page;
+import com.vault.dto.VaultAnalyticsDto.ProblemPoint;
+import com.vault.dto.VaultAnalyticsDto.Problems;
 import com.vault.dto.VaultAnalyticsDto.TrendPoint;
 import com.vault.dto.VaultAnalyticsDto.Usage;
+import com.vault.dto.VaultAnalyticsDto.VaultIssueRow;
 import com.vault.dto.VaultAnalyticsDto.VaultOption;
 import com.vault.dto.VaultAnalyticsDto.VaultRow;
+import com.vault.entity.Booking;
+import com.vault.entity.BookingStatusEvent;
 import com.vault.entity.BorrowRecord;
 import com.vault.entity.DailyItemStat;
 import com.vault.entity.DailyVaultStat;
 import com.vault.entity.Vault;
+import com.vault.repository.BookingRepository;
+import com.vault.repository.BookingStatusEventRepository;
 import com.vault.repository.BorrowRecordRepository;
 import com.vault.repository.DailyItemStatRepository;
 import com.vault.repository.DailyVaultStatRepository;
 import com.vault.repository.VaultRepository;
+import com.vault.service.BorrowCycleExtractor.RawCycle;
 import com.vault.service.StatsRollupService.Computation;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
@@ -29,19 +44,22 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * หน้า Vault Analytics — อ่านจากตารางสรุป ไม่ไล่ของดิบ
+ * หน้า Vault Analytics — แท็บการใช้งาน / ความผิดปกติ อ่านจากตารางสรุป ไม่ไล่ของดิบ
  *
  * ช่วงที่เลือก = วันก่อนหน้าจากตารางสรุป + วันนี้คำนวณสด (StatsRollupService.preview)
  * เพราะวันนี้ยังไม่จบวัน งานรายคืนจึงยังไม่ได้สรุป
+ * แท็บ Booking ย้อนหลังเป็นข้อยกเว้นเดียวที่อ่านของดิบ — เป็นรายการทีละใบ ไม่ใช่ยอดรวม
  *
  * ตัวหารของ "เวลาที่ตู้ไม่ว่าง" คือจำนวนตู้ × ชั่วโมงเปิดร้าน ไม่ใช่จำนวนกล่อง
  * เพราะตู้หยิบได้ทีละกล่อง เพดานของตู้หนึ่งใบคือ 12 ชั่วโมงต่อวัน
@@ -50,7 +68,14 @@ import java.util.stream.IntStream;
 public class VaultStatsService {
 
     public static final List<Integer> PERIODS = List.of(30, 90, 365, 1095);
+    public static final List<String> TABS = List.of("use", "problems", "bookings");
+    public static final List<String> BOOKING_FILTERS = List.of("all", "event", "game", "flagged");
+
     private static final int OPEN_MINUTES_PER_DAY = 12 * 60;
+    private static final int PAGE_SIZE = 50;
+    private static final int STUCK_PENDING_MINUTES = 15;
+    private static final int MAX_OPEN_ISSUES = 20;
+    private static final Set<String> TERMINAL = Set.of("RETURNED", "CANCELLED", "FAILED");
 
     private static final String[] TH_MONTH = {"ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
                                               "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."};
@@ -58,10 +83,14 @@ public class VaultStatsService {
     private static final String[] TH_DOW_FULL = {"จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"};
     private static final String[] DURATION_LABELS = {"ต่ำกว่า 5 นาที", "5 – 15 นาที", "15 – 30 นาที",
                                                      "30 – 60 นาที", "1 – 2 ชั่วโมง", "เกิน 2 ชั่วโมง"};
+    private static final String[] ANOMALY_TYPES = {"wrong_tag", "late_return", "lockdown_triggered",
+                                                   "lockdown_cleared", "force_unlock"};
 
     /** ยอดรวมของ 1 ช่วง — ทั้งช่วง / ช่วงก่อนหน้า / ถังในกราฟ / ต่อตู้ */
     private static final class Agg {
         long bookings, eventBookings, cycles, busyMinutes, vaultDays;
+        long noAck, lateCycles, unpaired, lateEvents;
+        final long[] anomalies = new long[ANOMALY_TYPES.length];   // เรียงตาม ANOMALY_TYPES
 
         void add(DailyVaultStat s) {
             bookings += s.getBookingsTotal();
@@ -69,31 +98,58 @@ public class VaultStatsService {
             cycles += s.getCycles();
             busyMinutes += s.getBusyMinutes();
             vaultDays++;   // 1 แถว = ตู้ 1 ใบ × 1 วัน — ตู้ที่เพิ่งติดตั้งกลางช่วงจึงไม่ถ่วงค่าเฉลี่ย
+            noAck += s.getBookingsNoAck();
+            lateCycles += s.getLateCycles();
+            unpaired += s.getUnpairedMoves();
+            lateEvents += s.getLateEvents();
+            anomalies[0] += s.getAnomalyWrongTag();
+            anomalies[1] += s.getAnomalyLateReturn();
+            anomalies[2] += s.getAnomalyLockdownTriggered();
+            anomalies[3] += s.getAnomalyLockdownCleared();
+            anomalies[4] += s.getAnomalyForceUnlock();
         }
 
         double busyPct() { return vaultDays == 0 ? 0 : busyMinutes * 100.0 / (vaultDays * OPEN_MINUTES_PER_DAY); }
         double avgMinutes() { return cycles == 0 ? 0 : (double) busyMinutes / cycles; }
+        double noAckPct() { return bookings == 0 ? 0 : noAck * 100.0 / bookings; }
+        double latePct() { return cycles == 0 ? 0 : lateCycles * 100.0 / cycles; }
+        long anomalyTotal() { long t = 0; for (long a : anomalies) t += a; return t; }
     }
 
     private final VaultRepository vaultRepository;
     private final DailyVaultStatRepository dailyVaultStatRepository;
     private final DailyItemStatRepository dailyItemStatRepository;
     private final BorrowRecordRepository borrowRecordRepository;
+    private final BookingRepository bookingRepository;
+    private final BookingStatusEventRepository eventRepository;
+    private final BorrowCycleExtractor cycleExtractor;
     private final StatsRollupService rollupService;
+    private final List<String> sessionItemIds;
 
     public VaultStatsService(VaultRepository vaultRepository,
                              DailyVaultStatRepository dailyVaultStatRepository,
                              DailyItemStatRepository dailyItemStatRepository,
                              BorrowRecordRepository borrowRecordRepository,
-                             StatsRollupService rollupService) {
+                             BookingRepository bookingRepository,
+                             BookingStatusEventRepository eventRepository,
+                             BorrowCycleExtractor cycleExtractor,
+                             StatsRollupService rollupService,
+                             @Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.vaultRepository = vaultRepository;
         this.dailyVaultStatRepository = dailyVaultStatRepository;
         this.dailyItemStatRepository = dailyItemStatRepository;
         this.borrowRecordRepository = borrowRecordRepository;
+        this.bookingRepository = bookingRepository;
+        this.eventRepository = eventRepository;
+        this.cycleExtractor = cycleExtractor;
         this.rollupService = rollupService;
+        // IN () ว่างเป็น SQL ที่ใช้ไม่ได้ — ใส่ค่าที่ไม่มีทางตรงไว้กันไว้
+        this.sessionItemIds = sessionItemIds.isEmpty() ? List.of("__none__") : sessionItemIds;
     }
 
-    public Page build(String vaultIdParam, int daysParam, boolean compare) {
+    public Page build(String vaultIdParam, int daysParam, boolean compare,
+                      String tabParam, String bookingFilterParam, int pageParam) {
+        String tab = TABS.contains(tabParam) ? tabParam : "use";
         int days = PERIODS.contains(daysParam) ? daysParam : 90;
         LocalDate today = LocalDate.now();
         LocalDate yesterday = today.minusDays(1);
@@ -105,41 +161,92 @@ public class VaultStatsService {
         List<Vault> vaults = vaultRepository.findAllByDeletedAtIsNullOrderByCreatedAtDesc();
         Vault scope = (vaultIdParam == null || vaultIdParam.isBlank()) ? null
                 : vaults.stream().filter(v -> v.getVaultId().equals(vaultIdParam)).findFirst().orElse(null);
-        Predicate<Vault> inScope = v -> scope == null || scope.getVaultId().equals(v.getVaultId());
+        Predicate<Vault> inScope = v -> v != null && (scope == null || scope.getVaultId().equals(v.getVaultId()));
 
-        // วันนี้ยังไม่อยู่ในตารางสรุป — คำนวณสดด้วย logic เดียวกับงานรายคืน แต่ไม่บันทึก
-        Computation todayCalc = rollupService.preview(today);
+        String granLabel = switch (gran) { case "week" -> "รายสัปดาห์"; case "month" -> "รายเดือน"; default -> "รายวัน"; };
+        Filter filter = new Filter(scope != null ? scope.getVaultId() : null, days, compare,
+                dateLabel(from), "วันนี้ " + dateLabel(today), gran, granLabel);
 
-        List<DailyVaultStat> allRows = new ArrayList<>(dailyVaultStatRepository.findRange(from, yesterday));
-        allRows.addAll(todayCalc.vaultStats());
-        List<DailyVaultStat> cur = allRows.stream().filter(s -> inScope.test(s.getVault())).toList();
+        Usage usage = null;
+        Problems problems = null;
+        BookingPage bookings = null;
+        boolean hasData;
 
-        Agg total = new Agg();
-        cur.forEach(total::add);
+        if ("bookings".equals(tab)) {
+            String bf = BOOKING_FILTERS.contains(bookingFilterParam) ? bookingFilterParam : "all";
+            bookings = bookingPage(scope, from, today, bf, Math.max(0, pageParam));
+            hasData = bookings.total() > 0 || !"all".equals(bf);
+        } else {
+            // วันนี้ยังไม่อยู่ในตารางสรุป — คำนวณสดด้วย logic เดียวกับงานรายคืน แต่ไม่บันทึก
+            Computation todayCalc = rollupService.preview(today);
 
-        Agg prev = new Agg();
-        long prevDaysComputed = 0;
-        if (compare) {
-            List<DailyVaultStat> prevRows = scope == null
-                    ? dailyVaultStatRepository.findRange(prevFrom, prevTo)
-                    : dailyVaultStatRepository.findRangeForVault(scope.getVaultId(), prevFrom, prevTo);
-            prevRows.forEach(prev::add);
-            prevDaysComputed = prevRows.stream().map(DailyVaultStat::getStatDate).distinct().count();
+            List<DailyVaultStat> allRows = new ArrayList<>(dailyVaultStatRepository.findRange(from, yesterday));
+            allRows.addAll(todayCalc.vaultStats());
+            List<DailyVaultStat> cur = allRows.stream().filter(s -> inScope.test(s.getVault())).toList();
+
+            Agg total = new Agg();
+            cur.forEach(total::add);
+
+            Agg prev = new Agg();
+            long prevDaysComputed = 0;
+            if (compare) {
+                List<DailyVaultStat> prevRows = scope == null
+                        ? dailyVaultStatRepository.findRange(prevFrom, prevTo)
+                        : dailyVaultStatRepository.findRangeForVault(scope.getVaultId(), prevFrom, prevTo);
+                prevRows.forEach(prev::add);
+                prevDaysComputed = prevRows.stream().map(DailyVaultStat::getStatDate).distinct().count();
+            }
+            // เทียบได้เฉพาะเมื่อช่วงก่อนหน้าถูกคำนวณเกือบครบทั้งช่วง — ถ้าเพิ่ง backfill แค่บางวัน
+            // ฐานจะเล็กมากจนได้ % เพี้ยนระดับหลักหมื่นที่ไม่มีความหมาย
+            boolean hasPrev = prevDaysComputed >= Math.ceil(days * 0.8) && prev.bookings + prev.cycles > 0;
+
+            // ถังในกราฟ — สร้างครบทุกถังตั้งแต่วันแรก วันที่ไม่มีการใช้งานต้องเป็นศูนย์ ไม่ใช่หายไปจากกราฟ
+            LinkedHashMap<LocalDate, Agg> buckets = new LinkedHashMap<>();
+            for (LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
+                buckets.computeIfAbsent(bucketKey(d, gran), k -> new Agg());
+            }
+            for (DailyVaultStat s : cur) {
+                Agg a = buckets.get(bucketKey(s.getStatDate(), gran));
+                if (a != null) a.add(s);
+            }
+
+            if ("problems".equals(tab)) {
+                problems = problems(inScope, vaults, allRows, total, prev, compare, hasPrev, buckets, gran);
+            } else {
+                List<BorrowRecord> todayRecords = todayCalc.records().stream()
+                        .filter(r -> inScope.test(r.getVault())).toList();
+                usage = usage(scope, inScope, from, yesterday, gran, buckets, todayCalc, todayRecords,
+                        cur, allRows, vaults, total, prev, compare, hasPrev);
+            }
+            hasData = total.bookings + total.cycles > 0;
         }
-        // เทียบได้เฉพาะเมื่อช่วงก่อนหน้าถูกคำนวณเกือบครบทั้งช่วง — ถ้าเพิ่ง backfill แค่บางวัน
-        // ฐานจะเล็กมากจนได้ % เพี้ยนระดับหลักหมื่นที่ไม่มีความหมาย
-        boolean hasPrev = prevDaysComputed >= Math.ceil(days * 0.8) && prev.bookings + prev.cycles > 0;
 
-        // ถังในกราฟ — สร้างครบทุกถังตั้งแต่วันแรก วันที่ไม่มีการใช้งานต้องเป็นศูนย์ ไม่ใช่หายไปจากกราฟ
-        LinkedHashMap<LocalDate, Agg> buckets = new LinkedHashMap<>();
-        for (LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
-            buckets.computeIfAbsent(bucketKey(d, gran), k -> new Agg());
-        }
-        for (DailyVaultStat s : cur) {
-            Agg a = buckets.get(bucketKey(s.getStatDate(), gran));
-            if (a != null) a.add(s);
-        }
+        LocalDateTime latest = dailyVaultStatRepository.findLatestComputedAt();
+
+        return new Page(
+                tab,
+                filter,
+                vaults.stream().map(v -> new VaultOption(v.getVaultId(), v.getVaultName())).toList(),
+                scope == null ? "ทุกตู้" : scope.getVaultId(),
+                scope == null ? vaults.size() + " ตู้ที่ใช้งานอยู่"
+                              : scope.getVaultName() + " · จุ " + scope.getVaultSlot() + " กล่อง",
+                latest == null ? null : dateTimeLabel(latest),
+                hasData,
+                usage,
+                problems,
+                bookings
+        );
+    }
+
+    // ── แท็บการใช้งาน ────────────────────────────────────────────────────────
+    private Usage usage(Vault scope, Predicate<Vault> inScope, LocalDate from, LocalDate yesterday, String gran,
+                        LinkedHashMap<LocalDate, Agg> buckets, Computation todayCalc,
+                        List<BorrowRecord> todayRecords, List<DailyVaultStat> cur,
+                        List<DailyVaultStat> allRows, List<Vault> vaults,
+                        Agg total, Agg prev, boolean compare, boolean hasPrev) {
+        String scopeId = scope != null ? scope.getVaultId() : null;
         List<Agg> series = new ArrayList<>(buckets.values());
+
         List<TrendPoint> trend = buckets.entrySet().stream()
                 .map(e -> new TrendPoint(bucketLabel(e.getKey(), gran),
                         e.getValue().bookings, e.getValue().eventBookings, e.getValue().cycles))
@@ -147,46 +254,14 @@ public class VaultStatsService {
 
         List<Kpi> kpis = List.of(
                 kpi("Booking ทั้งหมด", n(total.bookings), "ใบ",
-                        total.bookings, prev.bookings, compare, hasPrev, series, a -> a.bookings),
+                        total.bookings, prev.bookings, compare, hasPrev, false, series, a -> a.bookings),
                 kpi("รอบหยิบ-คืน", n(total.cycles), "รอบ",
-                        total.cycles, prev.cycles, compare, hasPrev, series, a -> a.cycles),
+                        total.cycles, prev.cycles, compare, hasPrev, false, series, a -> a.cycles),
                 kpi("เวลาที่ตู้ไม่ว่าง", dec(total.busyPct()), "%",
-                        total.busyPct(), prev.busyPct(), compare, hasPrev, series, Agg::busyPct),
+                        total.busyPct(), prev.busyPct(), compare, hasPrev, false, series, Agg::busyPct),
                 kpi("ยืมเฉลี่ยต่อรอบ", String.valueOf(Math.round(total.avgMinutes())), "นาที",
-                        total.avgMinutes(), prev.avgMinutes(), compare, hasPrev, series, Agg::avgMinutes)
+                        total.avgMinutes(), prev.avgMinutes(), compare, hasPrev, false, series, Agg::avgMinutes)
         );
-
-        List<BorrowRecord> todayRecords = todayCalc.records().stream()
-                .filter(r -> inScope.test(r.getVault())).toList();
-
-        Usage usage = heatAndRest(scope, inScope, from, yesterday, gran, buckets, todayCalc, todayRecords,
-                cur, allRows, vaults, kpis, trend);
-
-        String granLabel = switch (gran) { case "week" -> "รายสัปดาห์"; case "month" -> "รายเดือน"; default -> "รายวัน"; };
-        Filter filter = new Filter(scope != null ? scope.getVaultId() : null, days, compare,
-                dateLabel(from), "วันนี้ " + dateLabel(today), gran, granLabel);
-
-        LocalDateTime latest = dailyVaultStatRepository.findLatestComputedAt();
-
-        return new Page(
-                filter,
-                vaults.stream().map(v -> new VaultOption(v.getVaultId(), v.getVaultName())).toList(),
-                scope == null ? "ทุกตู้" : scope.getVaultId(),
-                scope == null ? vaults.size() + " ตู้ที่ใช้งานอยู่"
-                              : scope.getVaultName() + " · จุ " + scope.getVaultSlot() + " กล่อง",
-                latest == null ? null : dateTimeLabel(latest),
-                total.bookings + total.cycles > 0,
-                usage
-        );
-    }
-
-    // ── การ์ดที่เหลือของแท็บการใช้งาน ────────────────────────────────────────
-    private Usage heatAndRest(Vault scope, Predicate<Vault> inScope, LocalDate from, LocalDate yesterday, String gran,
-                              LinkedHashMap<LocalDate, Agg> buckets, Computation todayCalc,
-                              List<BorrowRecord> todayRecords, List<DailyVaultStat> cur,
-                              List<DailyVaultStat> allRows, List<Vault> vaults,
-                              List<Kpi> kpis, List<TrendPoint> trend) {
-        String scopeId = scope != null ? scope.getVaultId() : null;
 
         // heatmap — ชั่วโมงที่หยิบ
         long[][] grid = new long[7][24];
@@ -326,9 +401,166 @@ public class VaultStatsService {
                 perSession, perSessionNote, vaultRows);
     }
 
+    // ── แท็บความผิดปกติ ──────────────────────────────────────────────────────
+    private Problems problems(Predicate<Vault> inScope, List<Vault> vaults, List<DailyVaultStat> allRows,
+                              Agg total, Agg prev, boolean compare, boolean hasPrev,
+                              LinkedHashMap<LocalDate, Agg> buckets, String gran) {
+        List<Agg> series = new ArrayList<>(buckets.values());
+
+        // ทุกตัวในแท็บนี้ ยิ่งน้อยยิ่งดี — ลูกศรขึ้นจึงเป็นสีแดง
+        List<Kpi> kpis = List.of(
+                kpi("Device ไม่ตอบคำสั่ง", dec(total.noAckPct()), "%",
+                        total.noAckPct(), prev.noAckPct(), compare, hasPrev, true, series, Agg::noAckPct),
+                kpi("MOVE ที่ปิดไม่ลง", n(total.unpaired), "รอบ",
+                        total.unpaired, prev.unpaired, compare, hasPrev, true, series, a -> a.unpaired),
+                kpi("Event มาผิดลำดับ", n(total.lateEvents), "ครั้ง",
+                        total.lateEvents, prev.lateEvents, compare, hasPrev, true, series, a -> a.lateEvents),
+                kpi("คืนช้ากว่ากำหนด", dec(total.latePct()), "%",
+                        total.latePct(), prev.latePct(), compare, hasPrev, true, series, Agg::latePct)
+        );
+
+        List<ProblemPoint> trend = buckets.entrySet().stream()
+                .map(e -> new ProblemPoint(bucketLabel(e.getKey(), gran), e.getValue().anomalyTotal(),
+                        e.getValue().noAck, e.getValue().unpaired, e.getValue().lateEvents))
+                .toList();
+
+        long anomalyMax = 1;
+        for (long a : total.anomalies) anomalyMax = Math.max(anomalyMax, a);
+        List<BarRow> anomalies = new ArrayList<>();
+        for (int i = 0; i < ANOMALY_TYPES.length; i++) {
+            String delta = null;
+            if (compare && hasPrev && prev.anomalies[i] > 0) {
+                double pct = (total.anomalies[i] - prev.anomalies[i]) * 100.0 / prev.anomalies[i];
+                delta = (pct > 0 ? "▲ " : pct < 0 ? "▼ " : "") + dec(Math.abs(pct)) + "%";
+            }
+            anomalies.add(new BarRow(ANOMALY_TYPES[i], delta, total.anomalies[i], n(total.anomalies[i]),
+                    width(total.anomalies[i], anomalyMax), "lockdown_triggered".equals(ANOMALY_TYPES[i])));
+        }
+
+        List<Issue> issues = openIssues(inScope);
+
+        Map<String, List<DailyVaultStat>> byVault = allRows.stream()
+                .collect(Collectors.groupingBy(s -> s.getVault().getVaultId()));
+        List<VaultIssueRow> vaultRows = vaults.stream().map(v -> {
+            Agg a = new Agg();
+            byVault.getOrDefault(v.getVaultId(), List.of()).forEach(a::add);
+            String severity = a.unpaired > 0 || a.noAckPct() >= 3 ? "bad"
+                    : a.bookings > 0 && a.anomalyTotal() * 10 > a.bookings ? "warn" : "ok";
+            return new VaultIssueRow(v.getVaultId(), v.getVaultName(), a.bookings, dec(a.noAckPct()) + "%",
+                    a.unpaired, a.lateEvents, a.anomalyTotal(), severity);
+        }).sorted(Comparator.comparingLong((VaultIssueRow r) -> r.unpaired() + r.lateEvents() + r.anomalies()).reversed())
+          .toList();
+
+        return new Problems(kpis, trend, anomalies,
+                issues.stream().limit(MAX_OPEN_ISSUES).toList(), issues.size(), vaultRows);
+    }
+
+    /** ปัญหาที่ค้างอยู่ตอนนี้ — สถานะที่ระบบปิดเองไม่ได้แล้ว อ่านสดจาก bookings ไม่ใช่จากตารางสรุป */
+    private List<Issue> openIssues(Predicate<Vault> inScope) {
+        LocalDateTime now = LocalDateTime.now();
+        record Found(Issue issue, LocalDateTime since) {}
+        List<Found> found = new ArrayList<>();
+
+        for (Booking b : bookingRepository.findOpenPastEnd(now)) {
+            if (!inScope.test(b.getVault())) continue;
+            String v = b.getVault().getVaultId();
+            switch (b.getBookingStatus()) {
+                case "OVERDUE" -> found.add(new Found(new Issue("ของยังไม่คืนหลังหมดเวลา", "bad", b.getBookingId(), v,
+                        age(b.getBookingTimeEnd(), now), "ตามของกับร้าน แล้วเช็ค tag กับของจริงในตู้"), b.getBookingTimeEnd()));
+                case "ACTIVE" -> found.add(new Found(new Issue("เลยเวลาแล้ว ยังไม่มี event คืน", "bad", b.getBookingId(), v,
+                        age(b.getBookingTimeEnd(), now), "ตรวจว่าตู้ส่ง event คืนมาถึงหรือไม่"), b.getBookingTimeEnd()));
+                case "CONFIRMED" -> found.add(new Found(new Issue("หมดเวลาแต่ไม่เคยมีการหยิบ", "warn", b.getBookingId(), v,
+                        age(b.getBookingTimeEnd(), now), "booking ค้างสถานะ — ยกเลิกหรือปิดให้ถูกต้อง"), b.getBookingTimeEnd()));
+                case "PENDING" -> found.add(new Found(new Issue("ตู้ไม่ตอบคำสั่ง", "bad", b.getBookingId(), v,
+                        age(b.getCreatedAt(), now), "ping ตู้ แล้วสร้าง booking ใหม่"), b.getCreatedAt()));
+                default -> { }
+            }
+        }
+
+        // PENDING ที่ยังไม่หมดเวลา แต่ตู้เงียบเกิน 15 นาที — ลูกค้ายืนรอหน้าตู้อยู่
+        LocalDateTime stuckBefore = now.minusMinutes(STUCK_PENDING_MINUTES);
+        for (Booking b : bookingRepository.findByStatus("PENDING")) {
+            if (!inScope.test(b.getVault()) || b.getCreatedAt() == null) continue;
+            if (b.getBookingTimeEnd() != null && b.getBookingTimeEnd().isBefore(now)) continue;   // นับไปแล้วข้างบน
+            if (!b.getCreatedAt().isBefore(stuckBefore)) continue;
+            found.add(new Found(new Issue("ตู้ไม่ตอบคำสั่งเกิน " + STUCK_PENDING_MINUTES + " นาที", "bad",
+                    b.getBookingId(), b.getVault().getVaultId(), age(b.getCreatedAt(), now),
+                    "ping ตู้ — ลูกค้าอาจยืนรออยู่หน้าตู้"), b.getCreatedAt()));
+        }
+
+        // รุนแรงก่อน แล้วค้างนานสุดก่อน
+        found.sort(Comparator.comparing((Found f) -> "bad".equals(f.issue().severity()) ? 0 : 1)
+                .thenComparing(f -> f.since() == null ? now : f.since()));
+        return found.stream().map(Found::issue).toList();
+    }
+
+    // ── แท็บ Booking ย้อนหลัง ────────────────────────────────────────────────
+    private BookingPage bookingPage(Vault scope, LocalDate from, LocalDate today, String filter, int page) {
+        String type = "event".equals(filter) || "game".equals(filter) ? filter : "all";
+        boolean flagged = "flagged".equals(filter);
+
+        org.springframework.data.domain.Page<Booking> result = bookingRepository.findHistory(
+                scope != null ? scope.getVaultId() : "",
+                from.atStartOfDay(), today.plusDays(1).atStartOfDay(),
+                type, sessionItemIds, flagged, PageRequest.of(page, PAGE_SIZE));
+
+        List<Booking> list = result.getContent();
+        Map<String, List<BookingStatusEvent>> eventsByBooking = list.isEmpty() ? Map.of()
+                : eventRepository.findByBookingIds(list.stream().map(Booking::getId).toList()).stream()
+                    .collect(Collectors.groupingBy(e -> e.getBooking().getId(), LinkedHashMap::new, Collectors.toList()));
+
+        LocalDateTime now = LocalDateTime.now();
+        List<BookingRow> rows = list.stream().map(b -> {
+            List<BookingStatusEvent> events = eventsByBooking.getOrDefault(b.getId(), List.of());
+            boolean isEvent = cycleExtractor.isEvent(b);
+            List<RawCycle> cycles = cycleExtractor.cycles(b, events, now).stream().filter(c -> !c.pending()).toList();
+            long minutes = cycles.stream().mapToLong(RawCycle::minutes).sum();
+            boolean closedOrPast = TERMINAL.contains(b.getBookingStatus())
+                    || (b.getBookingTimeEnd() != null && now.isAfter(b.getBookingTimeEnd()));
+
+            List<Flag> flags = new ArrayList<>();
+            boolean answered = events.stream()
+                    .anyMatch(e -> "CONFIRMED".equals(e.getStatus()) || "FAILED".equals(e.getStatus()));
+            if (!answered) flags.add(new Flag("ตู้ไม่ตอบ", "bad"));
+            if (closedOrPast && cycles.stream().anyMatch(c -> c.returnedAt() == null)) flags.add(new Flag("MOVE ค้าง", "bad"));
+            Set<String> anomalyTypes = new LinkedHashSet<>();
+            boolean lateEvent = false;
+            for (BookingStatusEvent e : events) {
+                if (e.getStatus() == null) continue;
+                if (e.getStatus().startsWith("ANOMALY:")) anomalyTypes.add(e.getStatus().substring("ANOMALY:".length()));
+                if (e.getStatus().startsWith("LATE_EVENT:")) lateEvent = true;
+            }
+            anomalyTypes.forEach(t -> flags.add(new Flag(t, "lockdown_triggered".equals(t) ? "bad" : "warn")));
+            if (lateEvent) flags.add(new Flag("late event", "info"));
+            if (!anomalyTypes.contains("late_return") && cycles.stream().anyMatch(RawCycle::late)) {
+                flags.add(new Flag("คืนช้า", "warn"));
+            }
+
+            return new BookingRow(
+                    b.getBookingId(),
+                    isEvent ? "event" : "game",
+                    b.getVault() != null ? b.getVault().getVaultId() : "—",
+                    b.getBookingTimeStart() != null ? dateTimeLabel(b.getBookingTimeStart()) : "—",
+                    windowLabel(b),
+                    cycles.size(),
+                    minutes,
+                    flags,
+                    b.getBookingStatus(),
+                    b.getDeletedAt() != null
+            );
+        }).toList();
+
+        long total = result.getTotalElements();
+        String rangeLabel = total == 0 ? "ไม่พบ booking ในช่วงนี้"
+                : "แสดง " + n((long) page * PAGE_SIZE + 1) + "–" + n((long) page * PAGE_SIZE + rows.size())
+                  + " จาก " + n(total) + " ใบ";
+        return new BookingPage(filter, rows, total, page, result.getTotalPages(), rangeLabel);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
     private static Kpi kpi(String label, String value, String unit, double cur, double prev,
-                           boolean compare, boolean hasPrev, List<Agg> series, ToDoubleFunction<Agg> f) {
+                           boolean compare, boolean hasPrev, boolean lowerIsBetter,
+                           List<Agg> series, ToDoubleFunction<Agg> f) {
         String cls = null, text = null;
         if (compare) {
             if (!hasPrev || prev == 0) {
@@ -336,7 +568,8 @@ public class VaultStatsService {
                 text = "ช่วงก่อนไม่มีข้อมูล";
             } else {
                 double pct = (cur - prev) / prev * 100;
-                cls = Math.abs(pct) < 1.5 ? "flat" : pct > 0 ? "up" : "down";
+                boolean better = lowerIsBetter ? pct < 0 : pct > 0;
+                cls = Math.abs(pct) < 1.5 ? "flat" : better ? "up" : "down";
                 text = (pct > 0 ? "▲ " : pct < 0 ? "▼ " : "") + dec(Math.abs(pct)) + "% เทียบช่วงก่อน";
             }
         }
@@ -377,6 +610,20 @@ public class VaultStatsService {
     private static String dateTimeLabel(LocalDateTime t) {
         return t.getDayOfMonth() + " " + TH_MONTH[t.getMonthValue() - 1] + " "
                 + String.format("%02d:%02d", t.getHour(), t.getMinute()) + " น.";
+    }
+
+    private static String windowLabel(Booking b) {
+        if (b.getBookingTimeStart() == null || b.getBookingTimeEnd() == null) return "—";
+        long m = Duration.between(b.getBookingTimeStart(), b.getBookingTimeEnd()).toMinutes();
+        return m % 60 == 0 ? (m / 60) + " ชม." : (m / 60) + " ชม. " + (m % 60) + " น.";
+    }
+
+    private static String age(LocalDateTime since, LocalDateTime now) {
+        if (since == null) return "—";
+        long m = Math.max(0, Duration.between(since, now).toMinutes());
+        if (m < 60) return m + " นาที";
+        if (m < 48 * 60) return (m / 60) + " ชม.";
+        return (m / (24 * 60)) + " วัน";
     }
 
     private static String hoursLabel(long minutes) {
