@@ -156,7 +156,8 @@ public class AnalyticsSeedService {
 
             for (VaultSeed v : vaults) {
                 // ตู้หยิบได้ทีละกล่อง — วาง booking เรียงต่อกันตลอดวัน ไม่ให้ช่วงที่มีของออกซ้อนกัน
-                LocalDateTime cursor = day.atTime(10, 0);
+                // เริ่มวันไม่พร้อมกันทุกวัน — ถ้าเริ่ม 10:00 ตรงทุกวัน heatmap จะมีแถบสว่างปลอมที่ชั่วโมงนั้น
+                LocalDateTime cursor = day.atTime(10, 0).plusMinutes(rnd.nextInt(150));
                 LocalDateTime close = day.atTime(21, 30);
                 int target = (int) Math.round(4.2 * v.busy() * weekday * (0.7 + rnd.nextDouble() * 0.6));
                 for (int i = 0; i < target && cursor.isBefore(close); i++) {
