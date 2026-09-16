@@ -192,8 +192,12 @@
                 </div>
 
                 <section class="va-panel">
-                    <div class="va-panel-h"><h3>ตู้ทั้งหมด</h3><span class="va-note">กดรหัสตู้เพื่อกรองทั้งหน้า</span></div>
+                    <div class="va-panel-h">
+                        <h3 th:text="${p.filter.vaultId == null} ? 'ตู้ทั้งหมด' : 'เทียบกับตู้อื่น'">ตู้ทั้งหมด</h3>
+                        <span class="va-note" th:text="${p.filter.vaultId == null} ? 'กดรหัสตู้เพื่อกรองทั้งหน้า' : 'ตารางนี้ไม่ถูกกรองตามตู้ที่เลือก'">กดรหัสตู้เพื่อกรองทั้งหน้า</span>
+                    </div>
                     <p class="va-why">
+                        <span th:if="${p.filter.vaultId != null}">แถวที่ไฮไลต์คือตู้ที่เลือกอยู่ ตู้อื่นแสดงไว้ให้เทียบ กดรหัสตู้เพื่อย้ายไปดูตู้นั้น · </span>
                         เรียงตามรอบหยิบ-คืน · กราฟจิ๋วปรับสเกลกับตัวเอง บอกได้แค่<b>รูปทรง</b> ไม่ใช่ขนาด —
                         ถ้าจะเทียบข้ามตู้ให้ดูตัวเลขข้างๆ
                     </p>
@@ -211,10 +215,12 @@
                             </tr>
                             </thead>
                             <tbody>
-                            <tr th:each="v : ${p.usage.vaults}" th:class="'sev-' + ${v.severity}">
+                            <tr th:each="v : ${p.usage.vaults}"
+                                th:class="'sev-' + ${v.severity} + (${v.vaultId == p.filter.vaultId} ? ' va-cur' : '')">
                                 <td class="sev">
                                     <a th:href="@{/vault-analytics(vault=${v.vaultId}, days=${p.filter.days}, compare=${p.filter.compare}, tab='use')}"
                                        th:text="${v.vaultId}">vt-001</a>
+                                    <span class="va-cur-tag" th:if="${v.vaultId == p.filter.vaultId}">ดูอยู่</span>
                                 </td>
                                 <td th:text="${v.vaultName}">—</td>
                                 <td><div th:attr="data-spark=${v.sparkCsv}" data-color="#a78bfa"></div></td>
@@ -321,8 +327,12 @@
                 </div>
 
                 <section class="va-panel">
-                    <div class="va-panel-h"><h3>ตู้เรียงตามปัญหา</h3><span class="va-note">กดรหัสตู้เพื่อกรองทั้งหน้า</span></div>
+                    <div class="va-panel-h">
+                        <h3 th:text="${p.filter.vaultId == null} ? 'ตู้เรียงตามปัญหา' : 'เทียบกับตู้อื่น'">ตู้เรียงตามปัญหา</h3>
+                        <span class="va-note" th:text="${p.filter.vaultId == null} ? 'กดรหัสตู้เพื่อกรองทั้งหน้า' : 'ตารางนี้ไม่ถูกกรองตามตู้ที่เลือก'">กดรหัสตู้เพื่อกรองทั้งหน้า</span>
+                    </div>
                     <p class="va-why">
+                        <span th:if="${p.filter.vaultId != null}">แถวที่ไฮไลต์คือตู้ที่เลือกอยู่ ตู้อื่นแสดงไว้ให้เทียบ · </span>
                         ตู้ไม่ตอบคิดเป็น % ของ booking ไม่ใช่จำนวนดิบ — ตู้ที่คนใช้เยอะย่อมมีปัญหาเยอะกว่าโดยธรรมชาติ
                     </p>
                     <div class="va-tw">
@@ -334,10 +344,12 @@
                             </tr>
                             </thead>
                             <tbody>
-                            <tr th:each="v : ${p.problems.vaults}" th:class="'sev-' + ${v.severity}">
+                            <tr th:each="v : ${p.problems.vaults}"
+                                th:class="'sev-' + ${v.severity} + (${v.vaultId == p.filter.vaultId} ? ' va-cur' : '')">
                                 <td class="sev">
                                     <a th:href="@{/vault-analytics(vault=${v.vaultId}, days=${p.filter.days}, compare=${p.filter.compare}, tab='problems')}"
                                        th:text="${v.vaultId}">vt-001</a>
+                                    <span class="va-cur-tag" th:if="${v.vaultId == p.filter.vaultId}">ดูอยู่</span>
                                 </td>
                                 <td th:text="${v.vaultName}">—</td>
                                 <td class="n" th:text="${#numbers.formatInteger(v.bookings, 1, 'COMMA')}">0</td>

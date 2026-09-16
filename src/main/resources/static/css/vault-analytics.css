@@ -89,6 +89,13 @@
 .va-table tr.sev-ok .sev { border-left-color: #22c55e; }
 .va-table tr.sev-warn .sev { border-left-color: #f59e0b; }
 .va-table tr.sev-bad .sev { border-left-color: #ef4444; }
+/* แถวของตู้ที่กรองอยู่ — ตารางแสดงทุกตู้เสมอเพื่อให้เทียบกันได้ */
+.va-table tbody tr.va-cur td,
+.va-table tbody tr.va-cur:hover td { background: var(--vm-violet-soft); }
+.va-table tbody tr.va-cur a { color: #c4b5fd; }
+.va-cur-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+              color: #c4b5fd; background: var(--vm-violet-soft); border: 1px solid var(--vm-violet-ring);
+              border-radius: 999px; padding: 0.02rem 0.35rem; margin-left: 0.35rem; white-space: nowrap; }
 .va-table a { color: var(--vm-text); text-decoration: none; font-weight: 600; }
 .va-table a:hover { color: #c4b5fd; }
 .va-table svg { display: block; width: 76px; height: 18px; }
