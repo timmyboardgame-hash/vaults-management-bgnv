@@ -62,11 +62,22 @@ public class VaultBoardService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime since = LocalDate.now().atStartOfDay();   // "จบแล้ววันนี้"
 
-        List<BoardBooking> all = bookingRepository.findBoardBookings(vault.getVaultId(), since)
-                .stream().map(b -> toBoardBooking(b, now)).toList();
+        List<Booking> raw = bookingRepository.findBoardBookings(vault.getVaultId(), since);
+        List<BoardBooking> all = raw.stream().map(b -> toBoardBooking(b, now)).toList();
 
         List<BoardBooking> active = all.stream().filter(b -> !b.done()).toList();
         List<BoardBooking> done   = all.stream().filter(BoardBooking::done).toList();
+
+        // กล่อง session ไม่มีรอบหยิบ-คืนของตัวเอง (MOVE ทุกตัวชี้ไปที่กล่องเกม)
+        // ถ้าไม่ผูกกับ booking ตรงๆ การ์ดจะขึ้นว่า "พร้อมเปิดรอบ" ทั้งที่ยังมีรอบค้างอยู่
+        // ใช้เกณฑ์เดียวกับด่านกันจองซ้ำตอนสร้าง booking: ยังไม่จบ = ยังจองใหม่ไม่ได้
+        Map<String, String> sessionHoldBySerial = new LinkedHashMap<>();
+        for (Booking b : raw) {
+            if (!cycleExtractor.isEvent(b) || TERMINAL.contains(b.getBookingStatus())) continue;
+            if (b.getSerialNumber() != null) {
+                sessionHoldBySerial.putIfAbsent(b.getSerialNumber(), b.getBookingId());
+            }
+        }
 
         // กล่องที่ยังถืออยู่ / ถูกจองไว้ → จับคู่ด้วย matchKey (epc ถ้ามี ไม่งั้น serial)
         Map<String, String> heldByKey = new LinkedHashMap<>();
@@ -79,7 +90,7 @@ public class VaultBoardService {
             }
         }
 
-        List<BoardItem> items = buildItems(vault, active, heldByKey, reservedByKey, now);
+        List<BoardItem> items = buildItems(vault, active, heldByKey, reservedByKey, sessionHoldBySerial, now);
 
         List<BoardItem> realItems = items.stream().filter(i -> !i.session()).toList();
         int itemsOut = (int) realItems.stream().filter(BoardItem::out).count();
@@ -259,6 +270,7 @@ public class VaultBoardService {
     private List<BoardItem> buildItems(Vault vault, List<BoardBooking> active,
                                        Map<String, String> heldByKey,
                                        Map<String, String> reservedByKey,
+                                       Map<String, String> sessionHoldBySerial,
                                        LocalDateTime now) {
         List<BoardItem> items = new ArrayList<>();
 
@@ -266,7 +278,10 @@ public class VaultBoardService {
             boolean isSession = sessionItemIds.contains(vi.getItem().getItemId());
             String serial = vi.getSerialNumber();
             // กล่องเดียวกันอาจถูกอ้างด้วย epc (จาก MOVE event) หรือ serial (จาก game booking)
-            String heldBy = firstNonNull(lookup(heldByKey, vi.getRfidTag()), lookup(heldByKey, serial));
+            String heldByCycle = firstNonNull(lookup(heldByKey, vi.getRfidTag()), lookup(heldByKey, serial));
+            // กล่อง session ผูกกับ booking ที่ยังไม่จบโดยตรง ไม่ได้มาจากรอบหยิบ-คืน
+            final String heldBy = isSession && heldByCycle == null
+                    ? lookup(sessionHoldBySerial, serial) : heldByCycle;
             String reservedBy = firstNonNull(lookup(reservedByKey, vi.getRfidTag()), lookup(reservedByKey, serial));
 
             long minutesOut = 0, limit = 0;
@@ -282,6 +297,11 @@ public class VaultBoardService {
                     if (c != null) { minutesOut = c.minutes(); late = c.late(); }
                     if (owner.timeStart() != null && owner.timeEnd() != null) {
                         limit = Duration.between(owner.timeStart(), owner.timeEnd()).toMinutes();
+                    }
+                    // กล่อง session วัดจากช่วงเวลาของ booking เพราะไม่มีรอบหยิบ-คืนให้วัด
+                    if (isSession && owner.timeStart() != null) {
+                        minutesOut = Duration.between(owner.timeStart().toLocalDateTime(), now).toMinutes();
+                        late = owner.timeEnd() != null && now.isAfter(owner.timeEnd().toLocalDateTime());
                     }
                 }
             }
