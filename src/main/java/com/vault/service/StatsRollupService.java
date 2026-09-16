@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * สรุปสถิติรายวัน — แปลงของดิบ (bookings + booking_status_events) เป็นตารางคำนวณ
@@ -68,6 +69,8 @@ public class StatsRollupService {
     private final DailyItemStatRepository dailyItemStatRepository;
     private final TransactionTemplate tx;
     private final TransactionTemplate readOnlyTx;
+    /** กันงานรายคืนกับ backfill เขียนวันเดียวกันพร้อมกัน — ทั้งสองทางเรียกผ่าน bean ตัวนี้ตัวเดียว */
+    private final ReentrantLock rollupLock = new ReentrantLock();
 
     public StatsRollupService(BookingRepository bookingRepository,
                               BookingStatusEventRepository eventRepository,
@@ -100,7 +103,22 @@ public class StatsRollupService {
         return out;
     }
 
+    /**
+     * คำนวณ 1 วัน — ทีละคิวเท่านั้น
+     *
+     * งานรายคืนกับปุ่ม backfill อยู่คนละเธรดแต่ process เดียวกัน ถ้าชนกันที่วันเดียวกัน
+     * ทั้งคู่จะลบเสร็จแล้วต่างคนต่างเขียน กลายเป็นแถวซ้ำ · ล็อกให้เข้าทีละตัว
+     */
     public DayResult rollupDay(LocalDate date) {
+        rollupLock.lock();
+        try {
+            return rollupDayLocked(date);
+        } finally {
+            rollupLock.unlock();
+        }
+    }
+
+    private DayResult rollupDayLocked(LocalDate date) {
         DayResult r = tx.execute(status -> {
             borrowRecordRepository.deleteByStatDate(date);
             dailyVaultStatRepository.deleteByStatDate(date);
