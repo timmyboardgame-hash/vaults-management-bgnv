@@ -54,4 +54,42 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +
            "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE','OVERDUE') AND b.deletedAt IS NULL")
     List<Booking> findOpenPastEnd(@Param("now") java.time.LocalDateTime now);
+
+    // งานสรุปสถิติ — booking ที่ช่วงจองซ้อนกับช่วงเวลาที่ขอ
+    // ไม่กรอง deletedAt: game booking ที่ CANCELLED ถูก soft-delete แต่ต้องนับในสถิติ
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item LEFT JOIN FETCH b.agent LEFT JOIN FETCH b.vault " +
+           "WHERE b.bookingTimeStart < :to AND b.bookingTimeEnd >= :from")
+    List<Booking> findForRollup(@Param("from") java.time.LocalDateTime from,
+                                @Param("to") java.time.LocalDateTime to);
+
+    // หน้า Booking ย้อนหลัง — ไม่กรอง deletedAt: booking ที่ยกเลิกถูก soft-delete แต่ต้องเห็นในประวัติ
+    // :vaultId = '' คือทุกตู้ · :type = all / event / game · :flagged = เฉพาะใบที่มีปัญหา
+    // ปัญหา = OVERDUE / FAILED · มี ANOMALY หรือ LATE_EVENT · หรือตู้ไม่เคยตอบ (ไม่มี CONFIRMED / FAILED)
+    @Query(value = "SELECT b FROM Booking b JOIN FETCH b.item i LEFT JOIN FETCH b.vault v LEFT JOIN FETCH b.agent " +
+           "WHERE b.bookingTimeStart >= :from AND b.bookingTimeStart < :to " +
+           "AND (:vaultId = '' OR v.vaultId = :vaultId) " +
+           "AND (:type = 'all' OR (:type = 'event' AND i.itemId IN :sessionIds) OR (:type = 'game' AND i.itemId NOT IN :sessionIds)) " +
+           "AND (:flagged = false OR b.bookingStatus IN ('OVERDUE','FAILED') " +
+           "     OR EXISTS (SELECT e.id FROM BookingStatusEvent e WHERE e.booking = b AND (e.status LIKE 'ANOMALY:%' OR e.status LIKE 'LATE_EVENT:%')) " +
+           "     OR NOT EXISTS (SELECT e2.id FROM BookingStatusEvent e2 WHERE e2.booking = b AND e2.status IN ('CONFIRMED','FAILED'))) " +
+           "ORDER BY b.bookingTimeStart DESC",
+           countQuery = "SELECT COUNT(b) FROM Booking b JOIN b.item i LEFT JOIN b.vault v " +
+           "WHERE b.bookingTimeStart >= :from AND b.bookingTimeStart < :to " +
+           "AND (:vaultId = '' OR v.vaultId = :vaultId) " +
+           "AND (:type = 'all' OR (:type = 'event' AND i.itemId IN :sessionIds) OR (:type = 'game' AND i.itemId NOT IN :sessionIds)) " +
+           "AND (:flagged = false OR b.bookingStatus IN ('OVERDUE','FAILED') " +
+           "     OR EXISTS (SELECT e.id FROM BookingStatusEvent e WHERE e.booking = b AND (e.status LIKE 'ANOMALY:%' OR e.status LIKE 'LATE_EVENT:%')) " +
+           "     OR NOT EXISTS (SELECT e2.id FROM BookingStatusEvent e2 WHERE e2.booking = b AND e2.status IN ('CONFIRMED','FAILED')))")
+    org.springframework.data.domain.Page<Booking> findHistory(@Param("vaultId") String vaultId,
+                                                              @Param("from") java.time.LocalDateTime from,
+                                                              @Param("to") java.time.LocalDateTime to,
+                                                              @Param("type") String type,
+                                                              @Param("sessionIds") java.util.Collection<String> sessionIds,
+                                                              @Param("flagged") boolean flagged,
+                                                              org.springframework.data.domain.Pageable pageable);
+
+    // เปิด timeline จากหน้าอื่น — รวม booking ที่ถูก soft-delete (ยกเลิก) · booking_id อาจซ้ำกับใบเก่าที่ลบแล้ว เอาใบล่าสุด
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item LEFT JOIN FETCH b.agent LEFT JOIN FETCH b.vault " +
+           "WHERE b.bookingId = :bookingId ORDER BY b.createdAt DESC")
+    List<Booking> findAllByBookingIdIncludingDeleted(@Param("bookingId") String bookingId);
 }

@@ -75,6 +75,11 @@
             <i class="bi bi-grid-3x3-gap-fill"></i>
             <span>Booking Monitor</span>
         </a>
+        <a th:href="@{/vault-analytics}"
+           th:class="${active == 'vault-analytics'} ? 'sidebar-link active' : 'sidebar-link'">
+            <i class="bi bi-graph-up-arrow"></i>
+            <span>Vault Analytics</span>
+        </a>
         <a th:href="@{/vault-items}"
            th:class="${active == 'vault-items'} ? 'sidebar-link active' : 'sidebar-link'">
             <i class="bi bi-box-seam-fill"></i>

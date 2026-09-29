@@ -121,7 +121,9 @@
                             </div>
 
                             <div class="vb-card-row">
-                                <span class="vb-card-time" th:if="${it.out}"
+                                <span class="vb-card-time" th:if="${it.out and it.session}"
+                                      th:text="${it.over} ? 'รอบค้างอยู่' : 'รอบกำลังเปิด'">รอบกำลังเปิด</span>
+                                <span class="vb-card-time" th:if="${it.out and !it.session}"
                                       th:text="${it.minutesOut >= 60}
                                                ? ${it.minutesOut / 60} + ' ชม. ' + ${it.minutesOut % 60} + ' น.'
                                                : ${it.minutesOut} + ' นาที'">—</span>

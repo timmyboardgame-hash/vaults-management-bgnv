@@ -6,9 +6,9 @@ import com.vault.entity.BookingStatusEvent;
 import com.vault.entity.Vault;
 import com.vault.entity.VaultItem;
 import com.vault.repository.BookingRepository;
-import com.vault.repository.BookingStatusEventRepository;
 import com.vault.repository.VaultItemRepository;
 import com.vault.repository.VaultRepository;
+import com.vault.service.BorrowCycleExtractor.RawCycle;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +19,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,9 +27,8 @@ import java.util.Set;
 /**
  * Vault Board — รวม booking ทุกใบของตู้ + สถานะกล่องในตู้ ไว้ในหน้าเดียว
  *
- * ทุกค่าคำนวณจาก booking_status_events ที่ระบบบันทึกอยู่แล้ว:
- *   event booking → จับคู่ MOVE:PICKED_UP กับ MOVE:RETURNED ที่ epc เดียวกัน = 1 รอบ
- *   game booking  → ACTIVE = หยิบออก, RETURNED = คืน (1 รอบ)
+ * ทุกค่าคำนวณจาก booking_status_events ที่ระบบบันทึกอยู่แล้ว
+ * การแตก booking เป็นรอบหยิบ-คืนอยู่ที่ BorrowCycleExtractor — ใช้ตัวเดียวกับงานสรุปสถิติ
  */
 @Service
 public class VaultBoardService {
@@ -41,18 +39,18 @@ public class VaultBoardService {
     private final VaultRepository vaultRepository;
     private final VaultItemRepository vaultItemRepository;
     private final BookingRepository bookingRepository;
-    private final BookingStatusEventRepository eventRepository;
+    private final BorrowCycleExtractor cycleExtractor;
     private final List<String> sessionItemIds;
 
     public VaultBoardService(VaultRepository vaultRepository,
                              VaultItemRepository vaultItemRepository,
                              BookingRepository bookingRepository,
-                             BookingStatusEventRepository eventRepository,
+                             BorrowCycleExtractor cycleExtractor,
                              @Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.vaultRepository = vaultRepository;
         this.vaultItemRepository = vaultItemRepository;
         this.bookingRepository = bookingRepository;
-        this.eventRepository = eventRepository;
+        this.cycleExtractor = cycleExtractor;
         this.sessionItemIds = sessionItemIds;
     }
 
@@ -64,11 +62,22 @@ public class VaultBoardService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime since = LocalDate.now().atStartOfDay();   // "จบแล้ววันนี้"
 
-        List<BoardBooking> all = bookingRepository.findBoardBookings(vault.getVaultId(), since)
-                .stream().map(b -> toBoardBooking(b, now)).toList();
+        List<Booking> raw = bookingRepository.findBoardBookings(vault.getVaultId(), since);
+        List<BoardBooking> all = raw.stream().map(b -> toBoardBooking(b, now)).toList();
 
         List<BoardBooking> active = all.stream().filter(b -> !b.done()).toList();
         List<BoardBooking> done   = all.stream().filter(BoardBooking::done).toList();
+
+        // กล่อง session ไม่มีรอบหยิบ-คืนของตัวเอง (MOVE ทุกตัวชี้ไปที่กล่องเกม)
+        // ถ้าไม่ผูกกับ booking ตรงๆ การ์ดจะขึ้นว่า "พร้อมเปิดรอบ" ทั้งที่ยังมีรอบค้างอยู่
+        // ใช้เกณฑ์เดียวกับด่านกันจองซ้ำตอนสร้าง booking: ยังไม่จบ = ยังจองใหม่ไม่ได้
+        Map<String, String> sessionHoldBySerial = new LinkedHashMap<>();
+        for (Booking b : raw) {
+            if (!cycleExtractor.isEvent(b) || TERMINAL.contains(b.getBookingStatus())) continue;
+            if (b.getSerialNumber() != null) {
+                sessionHoldBySerial.putIfAbsent(b.getSerialNumber(), b.getBookingId());
+            }
+        }
 
         // กล่องที่ยังถืออยู่ / ถูกจองไว้ → จับคู่ด้วย matchKey (epc ถ้ามี ไม่งั้น serial)
         Map<String, String> heldByKey = new LinkedHashMap<>();
@@ -81,7 +90,7 @@ public class VaultBoardService {
             }
         }
 
-        List<BoardItem> items = buildItems(vault, active, heldByKey, reservedByKey, now);
+        List<BoardItem> items = buildItems(vault, active, heldByKey, reservedByKey, sessionHoldBySerial, now);
 
         List<BoardItem> realItems = items.stream().filter(i -> !i.session()).toList();
         int itemsOut = (int) realItems.stream().filter(BoardItem::out).count();
@@ -207,14 +216,23 @@ public class VaultBoardService {
         ));
     }
 
+    /**
+     * booking 1 ใบในรูปแบบของหน้า board — ใช้เปิด timeline จากหน้าอื่น (Vault Analytics)
+     * รวมใบที่ถูก soft-delete ด้วย เพราะ booking ที่ยกเลิกถูกตั้ง deleted_at แต่ยังต้องเปิดดูได้
+     */
+    public Optional<BoardBooking> getBookingIncludingDeleted(String bookingId) {
+        return bookingRepository.findAllByBookingIdIncludingDeleted(bookingId).stream().findFirst()
+                .map(b -> toBoardBooking(b, LocalDateTime.now()));
+    }
+
     // ── booking → board row (พร้อม cycles + timeline) ──────────────────────────
     private BoardBooking toBoardBooking(Booking b, LocalDateTime now) {
-        boolean isEvent = b.getItem() != null && sessionItemIds.contains(b.getItem().getItemId());
-        List<BookingStatusEvent> events = eventRepository.findByBookingIdOrderByOccurredAtAsc(b.getId());
+        boolean isEvent = cycleExtractor.isEvent(b);
+        List<BookingStatusEvent> events = cycleExtractor.events(b);
 
-        List<Cycle> cycles = isEvent
-                ? eventCycles(events, b, now)
-                : gameCycles(events, b, now);
+        List<Cycle> cycles = cycleExtractor.cycles(b, events, now).stream()
+                .map(this::toCycle)
+                .toList();
 
         long total = cycles.stream().filter(c -> !c.pending()).mapToLong(Cycle::minutes).sum();
         int holding = (int) cycles.stream().filter(c -> c.returnedAt() == null && !c.pending()).count();
@@ -242,74 +260,17 @@ public class VaultBoardService {
         );
     }
 
-    /** event booking — จับคู่ MOVE:PICKED_UP / MOVE:RETURNED ที่ epc เดียวกันเป็นรอบ */
-    private List<Cycle> eventCycles(List<BookingStatusEvent> events, Booking b, LocalDateTime now) {
-        Map<String, BookingStatusEvent> openByEpc = new LinkedHashMap<>();
-        List<Cycle> out = new ArrayList<>();
-
-        for (BookingStatusEvent e : events) {
-            String epc = extractEpc(e.getNote());
-            if (epc == null) continue;
-
-            if ("MOVE:PICKED_UP".equals(e.getStatus())) {
-                openByEpc.put(epc, e);
-            } else if ("MOVE:RETURNED".equals(e.getStatus())) {
-                BookingStatusEvent pick = openByEpc.remove(epc);
-                out.add(cycle(pick != null ? pick.getOccurredAt() : null, e.getOccurredAt(),
-                        e.getNote(), epc, b, now));
-            }
-        }
-        // กล่องที่หยิบแล้วยังไม่คืน
-        for (BookingStatusEvent pick : openByEpc.values()) {
-            out.add(cycle(pick.getOccurredAt(), null, pick.getNote(), extractEpc(pick.getNote()), b, now));
-        }
-        out.sort((x, y) -> {
-            if (x.pickedUpAt() == null || y.pickedUpAt() == null) return 0;
-            return x.pickedUpAt().compareTo(y.pickedUpAt());
-        });
-        return out;
-    }
-
-    /** game booking — ACTIVE = หยิบออก, RETURNED = คืน (กล่องเดียวจบ) */
-    private List<Cycle> gameCycles(List<BookingStatusEvent> events, Booking b, LocalDateTime now) {
-        LocalDateTime pickedUp = events.stream().filter(e -> "ACTIVE".equals(e.getStatus()))
-                .map(BookingStatusEvent::getOccurredAt).findFirst().orElse(null);
-        LocalDateTime returned = events.stream().filter(e -> "RETURNED".equals(e.getStatus()))
-                .map(BookingStatusEvent::getOccurredAt).findFirst().orElse(null);
-
-        String name = b.getItem() != null ? b.getItem().getItemNameEn() : "—";
-        String serial = b.getSerialNumber();
-
-        if (pickedUp == null) {
-            // ยังไม่ถูกหยิบ (PENDING / CONFIRMED / CANCELLED ก่อนรับ)
-            return List.of(new Cycle(name, serial, serial, null, null, 0, false, true));
-        }
-        long mins = Duration.between(pickedUp, returned != null ? returned : now).toMinutes();
-        boolean late = b.getBookingTimeEnd() != null
-                && (returned != null ? returned : now).isAfter(b.getBookingTimeEnd());
-        return List.of(new Cycle(name, serial, serial, toOffset(pickedUp), toOffset(returned), Math.max(0, mins), late, false));
-    }
-
-    private Cycle cycle(LocalDateTime pickedUp, LocalDateTime returned,
-                        String note, String epc, Booking b, LocalDateTime now) {
-        VaultItem vi = epc == null ? null
-                : vaultItemRepository.findActiveByRfidTag(epc).orElse(null);
-        String name   = vi != null ? vi.getItem().getItemNameEn() : itemNameFromNote(note);
-        String serial = vi != null ? vi.getSerialNumber() : null;
-
-        long mins = pickedUp == null ? 0
-                : Duration.between(pickedUp, returned != null ? returned : now).toMinutes();
-        boolean late = b.getBookingTimeEnd() != null
-                && (returned != null ? returned : now).isAfter(b.getBookingTimeEnd());
-
-        return new Cycle(name, serial, epc != null ? epc : serial,
-                toOffset(pickedUp), toOffset(returned), Math.max(0, mins), late, false);
+    private Cycle toCycle(RawCycle rc) {
+        return new Cycle(rc.itemName(), rc.serialNumber(), rc.matchKey(),
+                toOffset(rc.pickedUpAt()), toOffset(rc.returnedAt()),
+                rc.minutes(), rc.late(), rc.pending());
     }
 
     // ── กล่องในตู้ ─────────────────────────────────────────────────────────────
     private List<BoardItem> buildItems(Vault vault, List<BoardBooking> active,
                                        Map<String, String> heldByKey,
                                        Map<String, String> reservedByKey,
+                                       Map<String, String> sessionHoldBySerial,
                                        LocalDateTime now) {
         List<BoardItem> items = new ArrayList<>();
 
@@ -317,7 +278,10 @@ public class VaultBoardService {
             boolean isSession = sessionItemIds.contains(vi.getItem().getItemId());
             String serial = vi.getSerialNumber();
             // กล่องเดียวกันอาจถูกอ้างด้วย epc (จาก MOVE event) หรือ serial (จาก game booking)
-            String heldBy = firstNonNull(lookup(heldByKey, vi.getRfidTag()), lookup(heldByKey, serial));
+            String heldByCycle = firstNonNull(lookup(heldByKey, vi.getRfidTag()), lookup(heldByKey, serial));
+            // กล่อง session ผูกกับ booking ที่ยังไม่จบโดยตรง ไม่ได้มาจากรอบหยิบ-คืน
+            final String heldBy = isSession && heldByCycle == null
+                    ? lookup(sessionHoldBySerial, serial) : heldByCycle;
             String reservedBy = firstNonNull(lookup(reservedByKey, vi.getRfidTag()), lookup(reservedByKey, serial));
 
             long minutesOut = 0, limit = 0;
@@ -333,6 +297,11 @@ public class VaultBoardService {
                     if (c != null) { minutesOut = c.minutes(); late = c.late(); }
                     if (owner.timeStart() != null && owner.timeEnd() != null) {
                         limit = Duration.between(owner.timeStart(), owner.timeEnd()).toMinutes();
+                    }
+                    // กล่อง session วัดจากช่วงเวลาของ booking เพราะไม่มีรอบหยิบ-คืนให้วัด
+                    if (isSession && owner.timeStart() != null) {
+                        minutesOut = Duration.between(owner.timeStart().toLocalDateTime(), now).toMinutes();
+                        late = owner.timeEnd() != null && now.isAfter(owner.timeEnd().toLocalDateTime());
                     }
                 }
             }
@@ -362,25 +331,6 @@ public class VaultBoardService {
     // ── helpers ───────────────────────────────────────────────────────────────
     private static String lookup(Map<String, String> m, String k) { return k == null ? null : m.get(k); }
     private static String firstNonNull(String a, String b) { return a != null ? a : b; }
-
-    /** ดึง epc จาก note รูปแบบ "ชื่อเกม (serial) epc=XXXX" ที่ BookingService สร้าง */
-    static String extractEpc(String note) {
-        if (note == null) return null;
-        int i = note.lastIndexOf("epc=");
-        if (i < 0) return null;
-        String s = note.substring(i + 4).trim();
-        int sp = s.indexOf(' ');
-        return sp < 0 ? s : s.substring(0, sp);
-    }
-
-    /** เผื่อ tag ที่ไม่ได้ลงทะเบียน — ใช้ชื่อจาก note เท่าที่มี */
-    private static String itemNameFromNote(String note) {
-        if (note == null) return "—";
-        int i = note.indexOf(" (");
-        if (i > 0) return note.substring(0, i);
-        int j = note.indexOf(" epc=");
-        return j > 0 ? note.substring(0, j) : "ไม่ทราบกล่อง";
-    }
 
     private OffsetDateTime toOffset(LocalDateTime ldt) {
         return ldt != null ? ldt.atOffset(BANGKOK) : null;

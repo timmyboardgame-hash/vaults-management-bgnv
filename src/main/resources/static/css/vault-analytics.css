@@ -1,0 +1,163 @@
+/* ─── Vault Analytics ─────────────────────────────────────────
+   ใช้ token จาก main.css (--vm-*) · ไฟล์แยกเพื่อไม่ให้ main.css บวม
+   ──────────────────────────────────────────────────────────── */
+
+.va-flash { background: var(--vm-violet-soft); border: 1px solid var(--vm-violet-ring); color: #c4b5fd;
+            border-radius: var(--vm-radius-sm); padding: 0.55rem 0.8rem; font-size: 0.8rem; margin-bottom: 1rem; }
+
+/* ── filter bar ── */
+.va-bar { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; background: var(--vm-surface);
+          border: 1px solid var(--vm-border); border-radius: var(--vm-radius); padding: 0.6rem 0.8rem; margin-bottom: 1.2rem; }
+.va-bar-g { display: flex; align-items: center; gap: 0.45rem; }
+.va-bar-k { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--vm-muted); }
+.va-bar select { background: var(--vm-bg); border: 1px solid var(--vm-border-2); color: var(--vm-text); border-radius: var(--vm-radius-sm);
+                 font-size: 0.78rem; padding: 0.3rem 0.55rem; max-width: 260px; }
+.va-seg { display: inline-flex; background: var(--vm-bg); border: 1px solid var(--vm-border-2); border-radius: var(--vm-radius-sm); padding: 2px; }
+.va-seg a { font-size: 0.74rem; font-weight: 600; color: var(--vm-muted); text-decoration: none; border-radius: 6px; padding: 0.26rem 0.6rem; }
+.va-seg a:hover { color: var(--vm-text-2); }
+.va-seg a.on { background: var(--vm-input); color: var(--vm-text); }
+.va-bar .va-spacer { flex: 1; }
+.va-range { font-size: 0.72rem; color: var(--vm-muted); font-variant-numeric: tabular-nums; }
+.va-check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--vm-text-2); }
+
+/* ── scope ── */
+.va-scope { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.va-scope h2 { margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+.va-scope-meta { font-size: 0.74rem; color: var(--vm-muted); margin-top: 0.15rem; }
+
+/* ── KPI ── */
+/* auto-fit — แท็บการใช้งานมี 5 ใบ แท็บความผิดปกติมี 4 ใบ ใช้ grid เดียวกันได้ */
+.va-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.7rem; margin-bottom: 1.2rem; }
+.va-kpi-note { font-size: 0.68rem; color: var(--vm-muted); margin-top: 0.05rem; font-variant-numeric: tabular-nums; }
+.va-kpi { background: var(--vm-surface); border: 1px solid var(--vm-border); border-radius: var(--vm-radius);
+          padding: 0.8rem 0.9rem 0.55rem; min-width: 0; }
+.va-kpi-k { font-size: 0.63rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vm-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.va-kpi-v { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; margin-top: 0.15rem;
+            font-variant-numeric: tabular-nums; }
+.va-kpi-v small { font-size: 0.8rem; font-weight: 500; color: var(--vm-muted); margin-left: 0.15rem; letter-spacing: 0; }
+.va-delta { font-size: 0.7rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 0.05rem; }
+.va-delta span { color: var(--vm-muted); font-weight: 500; }
+.va-delta.up { color: #4ade80; } .va-delta.down { color: #f87171; } .va-delta.flat { color: var(--vm-muted); }
+.va-kpi svg { display: block; width: 100%; height: 26px; margin-top: 0.35rem; }
+
+/* ── panel ── */
+.va-rows { display: grid; gap: 1rem; }
+.va-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.va-panel { background: var(--vm-surface); border: 1px solid var(--vm-border); border-radius: var(--vm-radius); padding: 1rem 1.1rem 1.05rem; min-width: 0; }
+.va-panel-h { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
+.va-panel-h h3 { margin: 0; font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--vm-text-2); }
+.va-note { font-size: 0.7rem; color: var(--vm-muted); }
+.va-why { font-size: 0.72rem; color: var(--vm-muted); margin: 0.2rem 0 0.85rem; max-width: 70ch; }
+.va-why code, .va-note code { font-size: 0.92em; background: var(--vm-input); padding: 0 0.3rem; border-radius: 3px; color: var(--vm-text-2); }
+.va-empty { font-size: 0.8rem; color: var(--vm-muted); padding: 0.4rem 0; }
+
+/* ── trend chart ── */
+.va-chart svg { display: block; width: 100%; height: auto; }
+.va-legend { display: flex; gap: 0.35rem 1.1rem; flex-wrap: wrap; font-size: 0.71rem; color: var(--vm-text-2); margin-top: 0.5rem; }
+.va-legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid currentColor; vertical-align: middle; margin-right: 0.35rem; }
+
+/* ── bar rows ── */
+.va-bars { display: flex; flex-direction: column; gap: 0.42rem; }
+.va-bar-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.8fr) auto; gap: 0.7rem; align-items: center; }
+.va-bar-n { font-size: 0.77rem; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.va-bar-n em { font-style: normal; font-size: 0.67rem; color: var(--vm-muted); margin-left: 0.3rem; font-variant-numeric: tabular-nums; }
+.va-track { height: 9px; background: var(--vm-input); border-radius: 3px; overflow: hidden; }
+.va-track span { display: block; height: 100%; border-radius: 3px; background: var(--vm-violet); }
+.va-track span.warn { background: #f59e0b; }
+.va-bar-v { font-size: 0.74rem; font-weight: 600; color: var(--vm-text-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ── heatmap ── */
+.va-heat { display: grid; gap: 3px; }
+.va-heat-c { aspect-ratio: 1; border-radius: 3px; background: var(--vm-input); }
+.va-heat-lx, .va-heat-ly { font-size: 0.6rem; color: var(--vm-muted); font-variant-numeric: tabular-nums; }
+.va-heat-lx { text-align: center; }
+.va-heat-ly { display: grid; place-items: center; font-weight: 600; }
+.va-heat-scale { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; font-size: 0.66rem; color: var(--vm-muted); margin-top: 0.55rem; }
+.va-heat-scale i { width: 15px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* ── table ── */
+.va-tw { overflow-x: auto; margin: 0 -1.1rem; padding: 0 1.1rem; }
+.va-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 0.77rem; }
+.va-table th { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vm-muted);
+               text-align: left; padding: 0.3rem 0.55rem 0.45rem; border-bottom: 1px solid var(--vm-border-2); white-space: nowrap; }
+.va-table td { padding: 0.48rem 0.55rem; border-bottom: 1px solid var(--vm-border); vertical-align: middle; }
+.va-table tbody tr:last-child td { border-bottom: 0; }
+.va-table tbody tr:hover { background: var(--vm-surface-2); }
+.va-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.va-table .sev { border-left: 3px solid transparent; padding-left: 0.5rem; }
+.va-table tr.sev-ok .sev { border-left-color: #22c55e; }
+.va-table tr.sev-warn .sev { border-left-color: #f59e0b; }
+.va-table tr.sev-bad .sev { border-left-color: #ef4444; }
+/* แถวของตู้ที่กรองอยู่ — ตารางแสดงทุกตู้เสมอเพื่อให้เทียบกันได้ */
+.va-table tbody tr.va-cur td,
+.va-table tbody tr.va-cur:hover td { background: var(--vm-violet-soft); }
+.va-table tbody tr.va-cur a { color: #c4b5fd; }
+.va-cur-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+              color: #c4b5fd; background: var(--vm-violet-soft); border: 1px solid var(--vm-violet-ring);
+              border-radius: 999px; padding: 0.02rem 0.35rem; margin-left: 0.35rem; white-space: nowrap; }
+.va-table a { color: var(--vm-text); text-decoration: none; font-weight: 600; }
+.va-table a:hover { color: #c4b5fd; }
+.va-table svg { display: block; width: 76px; height: 18px; }
+.va-ok { color: #4ade80; } .va-warn { color: #fbbf24; } .va-bad { color: #f87171; }
+
+/* ── dev tools ── */
+.va-dev { border: 1px dashed var(--vm-border-2); border-radius: var(--vm-radius); padding: 0.8rem 1rem; margin-top: 1.2rem;
+          display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.va-dev-k { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #fbbf24; }
+.va-dev p { margin: 0; font-size: 0.74rem; color: var(--vm-muted); flex: 1; min-width: 220px; }
+.va-dev form { margin: 0; }
+
+/* ── tabs ── */
+.va-tabs { display: flex; gap: 0.1rem; border-bottom: 1px solid var(--vm-border-2); margin-bottom: 1.1rem; overflow-x: auto; }
+.va-tabs a { font-size: 0.82rem; font-weight: 600; color: var(--vm-muted); text-decoration: none; white-space: nowrap;
+             padding: 0.5rem 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.va-tabs a:hover { color: var(--vm-text-2); }
+.va-tabs a.on { color: #c4b5fd; border-bottom-color: var(--vm-violet); }
+.va-tabs a:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
+
+/* ── problems tab ── */
+.va-track span.bad { background: #ef4444; }
+.va-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--vm-text); cursor: pointer;
+           font-variant-numeric: tabular-nums; text-align: left; }
+.va-link:hover { color: #c4b5fd; }
+.va-link:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; border-radius: 3px; }
+.va-sub { font-size: 0.7rem; color: var(--vm-muted); }
+.va-callout { border: 1px dashed var(--vm-border-2); border-radius: var(--vm-radius); padding: 0.7rem 0.9rem;
+              font-size: 0.75rem; color: var(--vm-muted); }
+.va-callout b { color: var(--vm-text-2); }
+.va-callout code { font-size: 0.92em; background: var(--vm-input); padding: 0 0.3rem; border-radius: 3px; color: var(--vm-text-2); }
+
+/* ── booking history tab ── */
+.va-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.va-chips a { font-size: 0.74rem; font-weight: 600; color: var(--vm-muted); text-decoration: none; border: 1px solid var(--vm-border-2);
+              border-radius: 999px; padding: 0.22rem 0.7rem; }
+.va-chips a:hover { color: var(--vm-text-2); }
+.va-chips a.on { background: var(--vm-violet-soft); border-color: var(--vm-violet-ring); color: #c4b5fd; }
+.va-bk-row { cursor: pointer; }
+/* รหัส booking / ตู้ / เวลา ห้ามตัดบรรทัด อ่านไล่แนวตั้งไม่ได้ · ตารางอยู่ใน .va-tw จึง scroll ในกล่องแทนการดันหน้า
+   ยกเว้นคอลัมน์ธง — booking ที่มีหลายปัญหาต้องขึ้นบรรทัดใหม่ได้ */
+.va-bk-row td:not(.va-flags) { white-space: nowrap; }
+.va-bk-row:focus-visible { outline: 2px solid #a78bfa; outline-offset: -2px; }
+.va-table tr.sev-ev .sev { border-left-color: var(--vm-violet); }
+.va-mono { font-variant-numeric: tabular-nums; font-size: 0.74rem; }
+.va-type { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.08rem 0.35rem;
+           border-radius: 4px; background: var(--vm-input); color: var(--vm-muted); }
+.va-type.event { background: var(--vm-violet-soft); color: #a78bfa; }
+.va-flag { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 999px;
+           margin: 0 0.2rem 0.2rem 0; white-space: nowrap; }
+.va-flag.bad { background: rgba(239,68,68,.15); color: #f87171; }
+.va-flag.warn { background: rgba(245,158,11,.15); color: #fbbf24; }
+.va-flag.info { background: rgba(56,189,248,.12); color: #7dd3fc; }
+.va-pager { display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin-top: 0.9rem; }
+
+@media (max-width: 1100px) {
+  .va-two { grid-template-columns: 1fr; }
+}
+@media (max-width: 575.98px) {
+  .va-kpis { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .va-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* ใบสุดท้ายไม่ค้างอยู่ครึ่งแถว */
+  .va-kpi-v { font-size: 1.25rem; }
+  .va-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .va-bar-row .va-track { grid-column: 1 / -1; grid-row: 2; }
+}

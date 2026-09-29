@@ -1,0 +1,12 @@
+<!-- ไม่พบ booking — แสดงใน modal เดียวกัน ปิดได้ -->
+<div class="modal-overlay" x-data x-show="sheet !== null" x-cloak @click.self="sheet = null">
+    <div class="modal-content" style="max-width:480px">
+        <div class="modal-header">
+            <h5 class="modal-title">ไม่พบ booking นี้</h5>
+            <button class="btn-close" @click="sheet = null"></button>
+        </div>
+        <div class="modal-body">
+            <p class="vb-empty mb-0">booking อาจถูกลบถาวร หรือรหัสไม่ถูกต้อง</p>
+        </div>
+    </div>
+</div>
