@@ -117,6 +117,19 @@ public class VaultWebController {
         }
     }
 
+    /** ปลด lockdown จากหน้า vault — ตู้ออกจาก lockdown เองไม่ได้ ต้องสั่งจากที่นี่ */
+    @PostMapping("/{vaultId}/clear-lockdown")
+    @ResponseBody
+    public ResponseEntity<String> clearLockdown(@PathVariable String vaultId,
+                                                @RequestParam(required = false) String reason) {
+        try {
+            vaultService.clearLockdown(vaultId, reason);
+            return ResponseEntity.ok().header("HX-Redirect", "/vaults/" + vaultId).build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @PatchMapping("/{vaultId}")
     @ResponseBody
     public ResponseEntity<String> update(

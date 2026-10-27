@@ -1,5 +1,6 @@
 package com.vault.controller;
 
+import com.vault.dto.ClearLockdownRequest;
 import com.vault.dto.CreateVaultRequest;
 import com.vault.dto.ForceUnlockRequest;
 import com.vault.dto.SystemEventRequest;
@@ -62,6 +63,15 @@ public class VaultController {
         @RequestBody ForceUnlockRequest request
     ) {
         return ResponseEntity.ok(vaultService.forceUnlock(vaultId, request.reason()));
+    }
+
+    // POST /api/v1/vaults/{vaultId}/clear-lockdown  — ปลด lockdown ที่ตู้เข้าเองจาก wrong tag ครบ 3 ครั้ง
+    @PostMapping("/{vaultId}/clear-lockdown")
+    public ResponseEntity<Map<String, String>> clearLockdown(
+        @PathVariable String vaultId,
+        @RequestBody(required = false) ClearLockdownRequest request
+    ) {
+        return ResponseEntity.ok(vaultService.clearLockdown(vaultId, request != null ? request.reason() : null));
     }
 
     // POST /api/v1/vaults/{vaultId}/iot-system-event  — Lambda callback สำหรับ events/system/error

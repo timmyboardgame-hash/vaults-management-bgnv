@@ -173,6 +173,23 @@ public class AwsIotService {
     }
 
     /**
+     * Publish cmd/system/clear_lockdown → kiosk (สัญญา §3.6)
+     *
+     * ตู้เข้า lockdown เองเมื่อมีคนแตะ tag ผิดครบ 3 ครั้ง และออกเองไม่ได้ ต้องสั่งปลดจากฝั่ง backend
+     * Device respond ด้วย events/booking/anomaly anomaly_type=lockdown_cleared
+     */
+    public void publishClearLockdown(String thingName, String requestId, String reason) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishClearLockdown thing={}", thingName);
+            return;
+        }
+        Map<String, Object> payload = Map.of("reason", reason != null && !reason.isBlank()
+                ? reason : "cleared-by-admin");
+        publishMqtt("vault/" + thingName + "/cmd/system/clear_lockdown", requestId, payload);
+        log.info("[IoT] Published system/clear_lockdown thing={}", thingName);
+    }
+
+    /**
      * Publish cmd/booking/cancel → kiosk (fire-and-forget)
      * booking ใน DB ถูก CANCELLED ก่อนแล้ว — device respond เป็น informational เท่านั้น
      */
