@@ -8,7 +8,7 @@
 <div class="app-shell">
     <div th:replace="~{fragments/layout :: sidebar('vaults')}"></div>
 
-    <main class="main-content" x-data="{ showEdit: false, showBindItem: false, showUnbind: false, unbindId: '' }">
+    <main class="main-content" x-data="{ showEdit: false, showBindItem: false, showUnbind: false, unbindId: '', showClearLockdown: false, lockdownReason: '' }">
 
         <!-- Page Header -->
         <div class="page-header">
@@ -19,9 +19,14 @@
                 <h1 class="page-title" th:text="${vault.vaultName}">Vault</h1>
                 <p class="page-subtitle" th:text="${vault.vaultId}">—</p>
             </div>
-            <button class="btn btn-primary btn-sm" @click="showEdit = true">
-                <i class="bi bi-pencil me-1"></i>Edit
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-ghost btn-sm" @click="showClearLockdown = true">
+                    <i class="bi bi-unlock me-1"></i>ปลด lockdown
+                </button>
+                <button class="btn btn-primary btn-sm" @click="showEdit = true">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                </button>
+            </div>
         </div>
 
         <div class="row g-3">
@@ -254,6 +259,35 @@
                         <button type="submit" class="btn btn-primary">Add Item</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Clear Lockdown Modal -->
+        <div class="modal-overlay" x-show="showClearLockdown" x-cloak @click.self="showClearLockdown = false">
+            <div class="modal-content" style="max-width:440px">
+                <div class="modal-header">
+                    <h5 class="modal-title">ปลด lockdown</h5>
+                    <button class="btn-close" @click="showClearLockdown = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        ตู้จะเข้า lockdown เองเมื่อมีคนแตะ tag ผิดติดกัน 3 ครั้ง และออกเองไม่ได้
+                        คำสั่งนี้จะสั่งให้ตู้กลับมาทำงานตามปกติ
+                    </p>
+                    <label class="form-label">เหตุผล <span class="text-muted">(ไม่บังคับ)</span></label>
+                    <input type="text" class="form-control" x-model="lockdownReason"
+                           placeholder="เช่น ลูกค้าแตะผิดเอง ตรวจแล้วไม่มีปัญหา">
+                    <div class="form-text">บันทึกไว้ทั้งฝั่งเราและฝั่งตู้ เผื่อย้อนดูภายหลัง</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @click="showClearLockdown = false">ยกเลิก</button>
+                    <button class="btn btn-primary"
+                            th:attr="data-vault=${vault.vaultId}"
+                            @click="fetch('/vaults/' + $el.dataset.vault + '/clear-lockdown?reason=' + encodeURIComponent(lockdownReason), { method: 'POST' })
+                                      .then(() => window.location.reload()); showClearLockdown = false">
+                        ส่งคำสั่งปลด
+                    </button>
+                </div>
             </div>
         </div>
 

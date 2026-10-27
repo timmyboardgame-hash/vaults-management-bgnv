@@ -30,6 +30,31 @@ public class VaultService {
         this.awsIotService   = awsIotService;
     }
 
+    /**
+     * ปลด lockdown ของตู้ (สัญญา §3.6)
+     *
+     * ตู้เข้า lockdown เองเมื่อแตะ tag ผิดครบ 3 ครั้ง แล้วออกเองไม่ได้ — ถ้าไม่มีปุ่มนี้คือทางตัน
+     * ตอนนี้ระบบมีผู้ใช้เดียวคือ admin จึงให้ admin กดได้เลย ไม่ต้องยืนยันสองชั้น
+     * บันทึกไว้ใน log ว่าใครกดและเพราะอะไร เผื่อย้อนดูภายหลัง
+     */
+    public Map<String, String> clearLockdown(String vaultId, String reason) {
+        Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
+            .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
+
+        String actor = currentUser();
+        log.warn("[VAULT] Clear lockdown requested vault={} by={} reason={}", vaultId, actor, reason);
+
+        awsIotService.publishClearLockdown(vault.effectiveThingName(), UUID.randomUUID().toString(), reason);
+        return Map.of("vaultId", vaultId, "status", "command_sent",
+                "reason", reason != null ? reason : "", "by", actor);
+    }
+
+    /** ชื่อผู้ใช้ที่ล็อกอินอยู่ — เรียกผ่าน REST ด้วย api key จะไม่มีชื่อคน */
+    private static String currentUser() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getName() != null ? auth.getName() : "unknown";
+    }
+
     /** Admin override — เปิดตู้ฉุกเฉิน โดยไม่อ้างอิง booking */
     public Map<String, String> forceUnlock(String vaultId, String reason) {
         log.warn("[VAULT] Force unlock requested vault={} reason={}", vaultId, reason);
