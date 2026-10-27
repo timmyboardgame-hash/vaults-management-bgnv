@@ -22,13 +22,16 @@ public class VaultWebController {
     private final VaultItemService vaultItemService;
     private final ItemService itemService;
     private final BindingService bindingService;
+    private final com.vault.service.VaultStatusService vaultStatusService;
 
     public VaultWebController(VaultService vaultService, VaultItemService vaultItemService,
-                              ItemService itemService, BindingService bindingService) {
+                              ItemService itemService, BindingService bindingService,
+                              com.vault.service.VaultStatusService vaultStatusService) {
         this.vaultService = vaultService;
         this.vaultItemService = vaultItemService;
         this.itemService = itemService;
         this.bindingService = bindingService;
+        this.vaultStatusService = vaultStatusService;
     }
 
     @GetMapping
@@ -59,6 +62,7 @@ public class VaultWebController {
             model.addAttribute("vault", vault);
             model.addAttribute("vaultItems", vaultItems);
             model.addAttribute("boundAgents", bindingService.listByVault(vaultId));
+            model.addAttribute("deviceStatus", vaultStatusService.view(vaultId));
 
             // เฉพาะ item ที่ยังไม่มี active VaultItem (ไม่ว่าจะอยู่ใน vault ไหนก็ตาม)
             var allBoundItemIds = vaultItemService.listAllActive().stream()

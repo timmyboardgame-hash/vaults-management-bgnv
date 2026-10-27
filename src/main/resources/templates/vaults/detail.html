@@ -44,6 +44,25 @@
                         <span class="detail-value" th:text="${vault.vaultName}">—</span>
                     </div>
                     <div class="detail-row">
+                        <span class="detail-label">สถานะตู้</span>
+                        <span class="detail-value">
+                            <span class="badge" th:classappend="${deviceStatus.tone == 'ok'} ? 'badge-success'
+                                                               : (${deviceStatus.tone == 'warn'} ? 'badge-warning' : 'badge-danger')"
+                                  th:text="${deviceStatus.stateLabel}">—</span>
+                            <small class="text-muted ms-2" th:if="${deviceStatus.reported}"
+                                   th:text="${deviceStatus.lastSeenLabel} + ' · ' + ${deviceStatus.lastSeenExact}">—</small>
+                            <small class="text-muted ms-2" th:unless="${deviceStatus.reported}">ยังไม่เคยมี heartbeat เข้ามา</small>
+                        </span>
+                    </div>
+                    <div class="detail-row" th:if="${deviceStatus.reported}">
+                        <span class="detail-label">โหมด</span>
+                        <span class="detail-value">
+                            <span th:text="${deviceStatus.modeLabel}">—</span>
+                            <small class="text-muted ms-2" th:if="${deviceStatus.itemsInLocker != null}"
+                                   th:text="'ของในตู้ ' + ${deviceStatus.itemsInLocker} + ' · ถูกยืมออก ' + ${deviceStatus.itemsRentedOut}">—</small>
+                        </span>
+                    </div>
+                    <div class="detail-row">
                         <span class="detail-label">IoT Thing</span>
                         <span class="detail-value">
                             <span th:if="${vault.thingName != null}" th:text="${vault.thingName}">—</span>

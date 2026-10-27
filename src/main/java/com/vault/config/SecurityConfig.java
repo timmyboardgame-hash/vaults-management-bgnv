@@ -46,6 +46,8 @@ public class SecurityConfig {
                 // iot callbacks มี x-iot-secret auth ของตัวเอง — ไม่ต้องการ x-auth-code
                 .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/bookings/*/iot-event").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/vaults/*/iot-system-event").permitAll()
+                // heartbeat จากตู้ — ตรวจด้วย x-iot-secret ในคอนโทรลเลอร์เหมือน callback ตัวอื่น
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/vaults/*/iot-status").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(new ApiKeyAuthFilter(apiAuthCode),
