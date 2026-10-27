@@ -4,6 +4,7 @@ import com.vault.dto.CreateVaultRequest;
 import com.vault.dto.ForceUnlockRequest;
 import com.vault.dto.SystemEventRequest;
 import com.vault.dto.VaultResponse;
+import com.vault.service.VaultEventService;
 import com.vault.service.VaultService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -22,12 +23,14 @@ public class VaultController {
     private static final Logger log = LoggerFactory.getLogger(VaultController.class);
 
     private final VaultService vaultService;
+    private final VaultEventService vaultEventService;
 
     @Value("${iot.callback.secret:dev-iot-secret}")
     private String iotCallbackSecret;
 
-    public VaultController(VaultService vaultService) {
+    public VaultController(VaultService vaultService, VaultEventService vaultEventService) {
         this.vaultService = vaultService;
+        this.vaultEventService = vaultEventService;
     }
 
     @GetMapping
@@ -72,20 +75,16 @@ public class VaultController {
             log.warn("[IoT] Unauthorized system-event callback vault={}", vaultId);
             return ResponseEntity.status(401).build();
         }
-        // Lambda ส่งชื่อ thing มา ไม่ใช่รหัสตู้ — หาตู้ให้เจอก่อน ไม่งั้นไม่รู้ว่า error นี้ของตู้ไหน
-        String resolved = vaultService.getVaultByThing(vaultId)
-                .map(VaultResponse::vaultId)
-                .orElse(null);
-        if (resolved == null) {
-            log.warn("[IoT-SYSTEM] ไม่รู้จัก thing={} — ยังไม่มีตู้ไหนตั้งชื่อนี้ไว้", vaultId);
-        }
+        // เก็บลง vault_events ก่อน แล้วค่อย log — Lambda ส่งชื่อ thing มา ไม่ใช่รหัสตู้
+        VaultEventService.Result result = vaultEventService.record(vaultId, request);
 
         String level = "error".equals(request.severity()) ? "ERROR" : "WARN";
         log.atLevel("ERROR".equals(level)
                 ? org.slf4j.event.Level.ERROR
                 : org.slf4j.event.Level.WARN)
-            .log("[IoT-SYSTEM] thing={} vault={} errorType={} severity={} msg={}",
-                vaultId, resolved != null ? resolved : "ไม่พบ", request.errorType(), request.severity(), request.errorMessage());
+            .log("[IoT-SYSTEM] thing={} vault={} errorType={} severity={} เก็บ={} msg={}",
+                vaultId, result.vaultId() != null ? result.vaultId() : "ไม่พบ",
+                request.errorType(), request.severity(), result.reason(), request.errorMessage());
         return ResponseEntity.ok().build();
     }
 }
