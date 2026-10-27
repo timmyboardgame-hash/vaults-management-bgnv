@@ -28,6 +28,7 @@ import com.vault.repository.BookingStatusEventRepository;
 import com.vault.repository.BorrowRecordRepository;
 import com.vault.repository.DailyItemStatRepository;
 import com.vault.repository.DailyVaultStatRepository;
+import com.vault.repository.VaultEventRepository;
 import com.vault.repository.VaultRepository;
 import com.vault.service.BorrowCycleExtractor.RawCycle;
 import com.vault.service.StatsRollupService.Computation;
@@ -125,6 +126,7 @@ public class VaultStatsService {
     private final BorrowRecordRepository borrowRecordRepository;
     private final BookingRepository bookingRepository;
     private final BookingStatusEventRepository eventRepository;
+    private final VaultEventRepository vaultEventRepository;
     private final BorrowCycleExtractor cycleExtractor;
     private final StatsRollupService rollupService;
     private final List<String> sessionItemIds;
@@ -135,6 +137,7 @@ public class VaultStatsService {
                              BorrowRecordRepository borrowRecordRepository,
                              BookingRepository bookingRepository,
                              BookingStatusEventRepository eventRepository,
+                             VaultEventRepository vaultEventRepository,
                              BorrowCycleExtractor cycleExtractor,
                              StatsRollupService rollupService,
                              @Value("${session.item-ids:}") List<String> sessionItemIds) {
@@ -144,6 +147,7 @@ public class VaultStatsService {
         this.borrowRecordRepository = borrowRecordRepository;
         this.bookingRepository = bookingRepository;
         this.eventRepository = eventRepository;
+        this.vaultEventRepository = vaultEventRepository;
         this.cycleExtractor = cycleExtractor;
         this.rollupService = rollupService;
         // IN () ว่างเป็น SQL ที่ใช้ไม่ได้ — ใส่ค่าที่ไม่มีทางตรงไว้กันไว้
@@ -214,7 +218,8 @@ public class VaultStatsService {
             }
 
             if ("problems".equals(tab)) {
-                problems = problems(inScope, vaults, allRows, total, prev, compare, hasPrev, buckets, gran);
+                problems = problems(inScope, vaults, allRows, total, prev, compare, hasPrev, buckets, gran,
+                        scope != null ? scope.getVaultId() : null, from, today);
             } else {
                 List<BorrowRecord> todayRecords = todayCalc.records().stream()
                         .filter(r -> inScope.test(r.getVault())).toList();
@@ -412,7 +417,8 @@ public class VaultStatsService {
     // ── แท็บความผิดปกติ ──────────────────────────────────────────────────────
     private Problems problems(Predicate<Vault> inScope, List<Vault> vaults, List<DailyVaultStat> allRows,
                               Agg total, Agg prev, boolean compare, boolean hasPrev,
-                              LinkedHashMap<LocalDate, Agg> buckets, String gran) {
+                              LinkedHashMap<LocalDate, Agg> buckets, String gran,
+                              String scopeId, LocalDate from, LocalDate to) {
         List<Agg> series = new ArrayList<>(buckets.values());
 
         // ทุกตัวในแท็บนี้ ยิ่งน้อยยิ่งดี — ลูกศรขึ้นจึงเป็นสีแดง
@@ -445,6 +451,22 @@ public class VaultStatsService {
                     width(total.anomalies[i], anomalyMax), "lockdown_triggered".equals(ANOMALY_TYPES[i])));
         }
 
+        // error ของตัวตู้เอง — คนละชั้นกับ anomaly ที่ผูกกับ booking · มาจาก topic events/system
+        LocalDateTime evFrom = from.atStartOfDay();
+        LocalDateTime evTo = to.plusDays(1).atStartOfDay();
+        List<Object[]> rawErrors = scopeId == null
+                ? vaultEventRepository.countByType(evFrom, evTo)
+                : vaultEventRepository.countByTypeForVault(scopeId, evFrom, evTo);
+        long errMax = 1;
+        for (Object[] r : rawErrors) errMax = Math.max(errMax, lng(r[2]));
+        List<BarRow> deviceErrors = new ArrayList<>();
+        for (Object[] r : rawErrors) {
+            long count = lng(r[2]);
+            String severity = (String) r[1];
+            deviceErrors.add(new BarRow((String) r[0], severity, count, n(count),
+                    width(count, errMax), "error".equals(severity)));
+        }
+
         List<Issue> issues = openIssues(inScope);
 
         Map<String, List<DailyVaultStat>> byVault = allRows.stream()
@@ -459,7 +481,7 @@ public class VaultStatsService {
         }).sorted(Comparator.comparingLong((VaultIssueRow r) -> r.unpaired() + r.lateEvents() + r.anomalies()).reversed())
           .toList();
 
-        return new Problems(kpis, trend, anomalies,
+        return new Problems(kpis, trend, anomalies, deviceErrors,
                 issues.stream().limit(MAX_OPEN_ISSUES).toList(), issues.size(), vaultRows);
     }
 

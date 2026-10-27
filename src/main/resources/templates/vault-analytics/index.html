@@ -309,6 +309,24 @@
                     </section>
 
                     <section class="va-panel">
+                        <div class="va-panel-h"><h3>Error จากตัวตู้</h3><span class="va-note">ทั้งช่วง · แยกตามชนิด</span></div>
+                        <p class="va-why">
+                            ตู้รายงานผ่าน <code>events/system</code> — คนละชั้นกับ anomaly ข้างล่างที่ผูกกับ booking
+                            เช่น <code>rs485_timeout</code> คือสั่งเปิดช่องแล้วฮาร์ดแวร์ไม่ตอบ ซึ่งเกิดได้โดยไม่มีใครมาใช้ตู้เลย
+                        </p>
+                        <div class="va-bars">
+                            <div class="va-bar-row" th:each="b : ${p.problems.deviceErrors}">
+                                <div class="va-bar-n"><code th:text="${b.label}">rs485_timeout</code><em th:if="${b.sub != null}" th:text="${b.sub}">error</em></div>
+                                <div class="va-track">
+                                    <span th:style="'width:' + ${b.widthPct} + '%'" th:classappend="${b.warn} ? 'bad' : 'warn'"></span>
+                                </div>
+                                <div class="va-bar-v" th:text="${b.valueLabel}">0</div>
+                            </div>
+                        </div>
+                        <p class="va-empty" th:if="${p.problems.deviceErrors.isEmpty()}">ยังไม่มีรายงานจากตัวตู้ในช่วงนี้</p>
+                    </section>
+
+                    <section class="va-panel">
                         <div class="va-panel-h"><h3>Anomaly จาก device</h3><span class="va-note">ทั้งช่วง · เทียบช่วงก่อน</span></div>
                         <p class="va-why">
                             <code>booking_anomaly</code> ที่ตู้ส่งมา — แยก “คนใช้ผิด” (<code>wrong_tag</code>)
