@@ -39,6 +39,14 @@
                         <span class="detail-value" th:text="${vault.vaultName}">—</span>
                     </div>
                     <div class="detail-row">
+                        <span class="detail-label">IoT Thing</span>
+                        <span class="detail-value">
+                            <span th:if="${vault.thingName != null}" th:text="${vault.thingName}">—</span>
+                            <span th:if="${vault.thingName == null}" class="text-muted"
+                                  th:text="${vault.vaultId} + ' (ใช้รหัสตู้)'">—</span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
                         <span class="detail-label">Status</span>
                         <span class="detail-value">
                             <span class="badge badge-success" th:if="${vault.vaultStatus == 'ENABLE'}">ENABLE</span>
@@ -180,6 +188,12 @@
                             <label class="form-label">Name</label>
                             <input type="text" name="vaultName" class="form-control"
                                    th:value="${vault.vaultName}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">IoT Thing</label>
+                            <input type="text" name="thingName" class="form-control"
+                                   th:value="${vault.thingName}" th:placeholder="${vault.vaultId}">
+                            <div class="form-text">ชื่อ thing ใน AWS IoT ของตู้เครื่องนี้ — เว้นว่างไว้จะใช้รหัสตู้แทน · คำสั่งทุกอย่างส่งไปตามชื่อนี้ ถ้าตั้งผิดตู้จะไม่ได้รับคำสั่ง</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Status</label>

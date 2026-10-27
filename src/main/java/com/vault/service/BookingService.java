@@ -139,6 +139,7 @@ public class BookingService {
         }
 
         String vaultId = vaultItem.getVault().getVaultId();
+        String thingName = vaultItem.getVault().effectiveThingName();
         bindingRepository.findActiveByAgentAndVault(agentId, vaultId)
             .orElseThrow(() -> new IllegalArgumentException(
                 "Agent " + agentId + " is not bound to vault " + vaultId));
@@ -156,7 +157,7 @@ public class BookingService {
         // Publish MQTT command ไปยัง kiosk (fire-and-forget)
         // Device ตอบกลับผ่าน events/booking/created → Lambda → PATCH /api/v1/bookings/{id}/iot-event
         awsIotService.publishBookingCreate(
-            vaultId,
+            thingName,
             req.bookingId(),
             requestId,
             pin,
@@ -214,7 +215,7 @@ public class BookingService {
         String requestId = UUID.randomUUID().toString();
         if (booking.getVault() != null) {
             awsIotService.publishBookingExtend(
-                booking.getVault().getVaultId(), bookingId, requestId, newEnd);
+                booking.getVault().effectiveThingName(), bookingId, requestId, newEnd);
         } else {
             log.warn("[BOOKING] No vault on booking={} — skipping MQTT extend", bookingId);
         }
@@ -238,10 +239,10 @@ public class BookingService {
                 // Event booking ใช้ cmd/booking/end ตาม device contract —
                 // device จะรับคืนของที่ค้างอยู่ต่อได้ (closing flag) แล้วค่อย archive
                 awsIotService.publishBookingEnd(
-                    booking.getVault().getVaultId(), bookingId, requestId);
+                    booking.getVault().effectiveThingName(), bookingId, requestId);
             } else {
                 awsIotService.publishBookingCancel(
-                    booking.getVault().getVaultId(), bookingId, requestId);
+                    booking.getVault().effectiveThingName(), bookingId, requestId);
             }
         } else {
             log.warn("[BOOKING] No vault on booking={} — skipping MQTT cancel", bookingId);
