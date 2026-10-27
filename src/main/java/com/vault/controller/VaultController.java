@@ -3,10 +3,12 @@ package com.vault.controller;
 import com.vault.dto.ClearLockdownRequest;
 import com.vault.dto.CreateVaultRequest;
 import com.vault.dto.ForceUnlockRequest;
+import com.vault.dto.StatusReportRequest;
 import com.vault.dto.SystemEventRequest;
 import com.vault.dto.VaultResponse;
 import com.vault.service.VaultEventService;
 import com.vault.service.VaultService;
+import com.vault.service.VaultStatusService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +27,16 @@ public class VaultController {
 
     private final VaultService vaultService;
     private final VaultEventService vaultEventService;
+    private final VaultStatusService vaultStatusService;
 
     @Value("${iot.callback.secret:dev-iot-secret}")
     private String iotCallbackSecret;
 
-    public VaultController(VaultService vaultService, VaultEventService vaultEventService) {
+    public VaultController(VaultService vaultService, VaultEventService vaultEventService,
+                           VaultStatusService vaultStatusService) {
         this.vaultService = vaultService;
         this.vaultEventService = vaultEventService;
+        this.vaultStatusService = vaultStatusService;
     }
 
     @GetMapping
@@ -72,6 +77,21 @@ public class VaultController {
         @RequestBody(required = false) ClearLockdownRequest request
     ) {
         return ResponseEntity.ok(vaultService.clearLockdown(vaultId, request != null ? request.reason() : null));
+    }
+
+    // POST /api/v1/vaults/{thingName}/iot-status  — Lambda callback สำหรับ heartbeat (topic vault/{thing}/status)
+    @PostMapping("/{thingName}/iot-status")
+    public ResponseEntity<Void> handleStatus(
+        @PathVariable String thingName,
+        @RequestBody StatusReportRequest request,
+        @RequestHeader(value = "x-iot-secret", required = false) String secret
+    ) {
+        if (!iotCallbackSecret.equals(secret)) {
+            log.warn("[STATUS] Unauthorized status callback thing={}", thingName);
+            return ResponseEntity.status(401).build();
+        }
+        vaultStatusService.record(thingName, request);
+        return ResponseEntity.ok().build();
     }
 
     // POST /api/v1/vaults/{vaultId}/iot-system-event  — Lambda callback สำหรับ events/system/error
