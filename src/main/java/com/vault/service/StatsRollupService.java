@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -202,7 +203,7 @@ public class StatsRollupService {
         // anomaly / late event นับตามเวลาที่เกิด ไม่ผูกกับช่วงจอง — LATE_EVENT มาถึงหลัง booking ปิดไปนานได้
         for (BookingStatusEvent e : eventRepository.findOccurredBetween(from, to)) {
             Vault v = e.getBooking().getVault();
-            if (v != null) vault(vaults, v).countEvent(e.getStatus());
+            if (v != null) vault(vaults, v).countEvent(e.getStatus(), e.getBooking().getId());
         }
 
         return new Computation(date, bookingCount,
@@ -241,13 +242,18 @@ public class StatsRollupService {
     }
 
     // ── ตัวสะสมยอดระหว่างคำนวณ ─────────────────────────────────────────────────
-    private static final class VaultAcc {
+    // package-private เพื่อให้เทสต์เรียกตรงได้ — ไม่ต้องตั้ง Spring context ทั้งก้อน
+    static final class VaultAcc {
         final Vault vault;
         int bookingsTotal, bookingsEvent, bookingsGame, bookingsCancelled, bookingsNoAck;
         int cycles, lateCycles;
         long busyMinutes;
         int durUnder5, dur5To15, dur15To30, dur30To60, dur60To120, durOver120;
-        int wrongTag, lockdownTriggered, lockdownCleared, forceUnlock, lateReturn, lateEvents, unpairedMoves;
+        int wrongTag, lockdownTriggered, lockdownCleared, forceUnlock, lateEvents, unpairedMoves;
+
+        // ตู้ปล่อย late_return ซ้ำทุก 15 นาที ตลอดเวลาที่ของยังไม่ถูกคืน (สัญญา MQTT §4.6)
+        // จึงนับเป็นจำนวน booking ที่ค้างในวันนั้น ไม่ใช่จำนวนครั้งที่เตือน — ไม่งั้นของค้าง 3 ชม. = 12 ครั้ง
+        final Set<String> lateReturnBookings = new HashSet<>();
 
         VaultAcc(Vault vault) { this.vault = vault; }
 
@@ -263,7 +269,7 @@ public class StatsRollupService {
             else durOver120++;
         }
 
-        void countEvent(String status) {
+        void countEvent(String status, String bookingId) {
             if (status == null) return;
             if (status.startsWith("LATE_EVENT:")) { lateEvents++; return; }
             switch (status) {
@@ -271,7 +277,7 @@ public class StatsRollupService {
                 case "ANOMALY:lockdown_triggered" -> lockdownTriggered++;
                 case "ANOMALY:lockdown_cleared"   -> lockdownCleared++;
                 case "ANOMALY:force_unlock"       -> forceUnlock++;
-                case "ANOMALY:late_return"        -> lateReturn++;
+                case "ANOMALY:late_return"        -> lateReturnBookings.add(bookingId != null ? bookingId : "");
                 default -> { }
             }
         }
@@ -298,7 +304,7 @@ public class StatsRollupService {
             s.setAnomalyLockdownTriggered(lockdownTriggered);
             s.setAnomalyLockdownCleared(lockdownCleared);
             s.setAnomalyForceUnlock(forceUnlock);
-            s.setAnomalyLateReturn(lateReturn);
+            s.setAnomalyLateReturn(lateReturnBookings.size());
             s.setLateEvents(lateEvents);
             s.setUnpairedMoves(unpairedMoves);
             s.setComputedAt(now);
