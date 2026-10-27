@@ -38,7 +38,7 @@ public class VaultService {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("reason is required for force_unlock");
         }
-        awsIotService.publishForceUnlock(vault.getVaultId(), UUID.randomUUID().toString(), reason);
+        awsIotService.publishForceUnlock(vault.effectiveThingName(), UUID.randomUUID().toString(), reason);
         return Map.of("vaultId", vaultId, "status", "command_sent", "reason", reason);
     }
 
@@ -63,6 +63,11 @@ public class VaultService {
     }
 
     @Transactional
+    /** หาตู้จากชื่อ thing ที่ AWS ส่งมา — ตู้ที่ยังไม่ได้ตั้ง thing_name จะหาด้วยรหัสตู้ได้เหมือนเดิม */
+    public Optional<VaultResponse> getVaultByThing(String thingName) {
+        return vaultRepository.findByThingName(thingName).map(this::toResponse);
+    }
+
     public VaultResponse createVault(CreateVaultRequest req) {
         log.info("[VAULT] Creating vault {}", req.vaultId());
         if (!VALID_SLOTS.contains(req.vaultSlot())) {
@@ -81,11 +86,14 @@ public class VaultService {
     }
 
     @Transactional
-    public VaultResponse updateVault(String vaultId, String vaultName, String vaultStatus, String description) {
+    public VaultResponse updateVault(String vaultId, String vaultName, String vaultStatus, String description,
+                                     String thingName) {
         log.info("[VAULT] Updating vault {}", vaultId);
         Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
             .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
         if (vaultName   != null) vault.setVaultName(vaultName);
+        // ว่าง = ล้างค่ากลับไปใช้ vaultId เป็นชื่อ thing
+        if (thingName   != null) vault.setThingName(thingName.isBlank() ? null : thingName.trim());
         if (vaultStatus != null) vault.setVaultStatus(vaultStatus);
         vault.setDescription(description);
         return toResponse(vaultRepository.save(vault));
@@ -101,6 +109,6 @@ public class VaultService {
     }
 
     private VaultResponse toResponse(Vault v) {
-        return new VaultResponse(v.getId(), v.getVaultId(), v.getVaultName(), v.getVaultStatus(), v.getVaultSlot(), v.getDescription(), v.getCreatedAt());
+        return new VaultResponse(v.getId(), v.getVaultId(), v.getThingName(), v.getVaultName(), v.getVaultStatus(), v.getVaultSlot(), v.getDescription(), v.getCreatedAt());
     }
 }

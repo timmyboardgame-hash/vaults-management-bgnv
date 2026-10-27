@@ -30,6 +30,11 @@ public class Vault {
     @Column(name = "description")
     private String description;
 
+    // ชื่อ thing ฝั่ง AWS IoT — ตู้จริงชื่อคนละแบบกับรหัสตู้ (เช่น vault-locker-001 กับ vt-001)
+    // ว่างไว้ = ใช้ vaultId เหมือนพฤติกรรมเดิม ตู้ที่ตั้งชื่อตรงกันอยู่แล้วจึงไม่ต้องแก้อะไร
+    @Column(name = "thing_name")
+    private String thingName;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -60,6 +65,14 @@ public class Vault {
 
     public Integer getVaultSlot() { return vaultSlot; }
     public void setVaultSlot(Integer vaultSlot) { this.vaultSlot = vaultSlot; }
+
+    public String getThingName() { return thingName; }
+    public void setThingName(String thingName) { this.thingName = thingName; }
+
+    /** ชื่อที่ใช้คุยกับ AWS IoT จริง — ต้องเรียกตัวนี้เสมอ อย่าใช้ vaultId ตรงๆ */
+    public String effectiveThingName() {
+        return thingName != null && !thingName.isBlank() ? thingName : vaultId;
+    }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

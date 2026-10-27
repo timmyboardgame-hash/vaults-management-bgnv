@@ -72,12 +72,20 @@ public class VaultController {
             log.warn("[IoT] Unauthorized system-event callback vault={}", vaultId);
             return ResponseEntity.status(401).build();
         }
+        // Lambda ส่งชื่อ thing มา ไม่ใช่รหัสตู้ — หาตู้ให้เจอก่อน ไม่งั้นไม่รู้ว่า error นี้ของตู้ไหน
+        String resolved = vaultService.getVaultByThing(vaultId)
+                .map(VaultResponse::vaultId)
+                .orElse(null);
+        if (resolved == null) {
+            log.warn("[IoT-SYSTEM] ไม่รู้จัก thing={} — ยังไม่มีตู้ไหนตั้งชื่อนี้ไว้", vaultId);
+        }
+
         String level = "error".equals(request.severity()) ? "ERROR" : "WARN";
         log.atLevel("ERROR".equals(level)
                 ? org.slf4j.event.Level.ERROR
                 : org.slf4j.event.Level.WARN)
-            .log("[IoT-SYSTEM] vault={} errorType={} severity={} msg={}",
-                vaultId, request.errorType(), request.severity(), request.errorMessage());
+            .log("[IoT-SYSTEM] thing={} vault={} errorType={} severity={} msg={}",
+                vaultId, resolved != null ? resolved : "ไม่พบ", request.errorType(), request.severity(), request.errorMessage());
         return ResponseEntity.ok().build();
     }
 }

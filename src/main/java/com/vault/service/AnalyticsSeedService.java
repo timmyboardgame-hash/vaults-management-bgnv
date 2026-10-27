@@ -208,7 +208,7 @@ public class AnalyticsSeedService {
                 if (roll(rnd, 0.05)) batch.event(id, "ANOMALY:wrong_tag", "wrong tag detected", pick.minusMinutes(1));
                 batch.event(id, "ACTIVE", null, pick);
                 maybeLockdown(batch, rnd, id, pick);
-                if (ret.isAfter(end.plusMinutes(15))) batch.event(id, "ANOMALY:late_return", null, end.plusMinutes(15));
+                lateReturnWarnings(batch, id, end, ret);
                 batch.event(id, "RETURNED", null, ret);
                 status = "RETURNED";
                 last = ret;
@@ -271,10 +271,12 @@ public class AnalyticsSeedService {
 
                 if (openTag != null) {
                     batch.event(id, "OVERDUE", "หมดเวลาแล้วยังไม่คืน 1 กล่อง: " + openTag, end);
+                    // ของไม่เคยถูกคืน — ตู้เตือนต่อเนื่อง จำลองไว้ 1 วันตามเพดานใน lateReturnWarnings
+                    lateReturnWarnings(batch, id, end, end.plusDays(1));
                     status = "OVERDUE";
                     last = end;
                 } else {
-                    if (last.isAfter(end.plusMinutes(15))) batch.event(id, "ANOMALY:late_return", null, end.plusMinutes(15));
+                    lateReturnWarnings(batch, id, end, last);
                     LocalDateTime closed = later(last, end);
                     batch.event(id, "RETURNED", last.isAfter(end)
                             ? "All items returned (after time end)" : "Session expired — all items returned", closed);
@@ -307,6 +309,20 @@ public class AnalyticsSeedService {
         }
         if (roll(rnd, 0.007)) {
             batch.event(bookingId, "ANOMALY:force_unlock", "force unlock by admin", around.plusMinutes(5));
+        }
+    }
+
+    /**
+     * ตู้เตือนของค้างซ้ำทุก 15 นาที นับจากหมดเวลาไปแล้ว 1 ชม. จนกว่าจะได้คืน (สัญญา MQTT §4.6)
+     * ของเดิมจำลองไว้ครั้งเดียวซึ่งไม่ตรงกับของจริง · จำกัดไม่เกิน 1 วันต่อ booking พอให้เห็นพฤติกรรมซ้ำ
+     * โดยข้อมูลทดสอบไม่บวม (ของจริงที่ค้างข้ามสัปดาห์จะเตือนมากกว่านี้มาก)
+     */
+    private void lateReturnWarnings(Batch batch, String bookingId, LocalDateTime end, LocalDateTime until) {
+        if (end == null || until == null) return;
+        LocalDateTime at = end.plusHours(1);
+        for (int i = 0; i < 96 && !at.isAfter(until); i++) {
+            batch.event(bookingId, "ANOMALY:late_return", null, at);
+            at = at.plusMinutes(15);
         }
     }
 

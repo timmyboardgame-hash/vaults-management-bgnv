@@ -123,9 +123,10 @@ public class VaultWebController {
             @PathVariable String vaultId,
             @RequestParam(required = false) String vaultName,
             @RequestParam(required = false) String vaultStatus,
-            @RequestParam(required = false) String description) {
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String thingName) {
         try {
-            vaultService.updateVault(vaultId, vaultName, vaultStatus, description);
+            vaultService.updateVault(vaultId, vaultName, vaultStatus, description, thingName);
             return ResponseEntity.ok().header("HX-Redirect", "/vaults/" + vaultId).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
