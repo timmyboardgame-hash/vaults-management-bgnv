@@ -91,6 +91,7 @@ public class VaultAnalyticsDto {
         List<Kpi> kpis,
         List<ProblemPoint> trend,
         List<BarRow> anomalies,
+        List<BarRow> deviceErrors,   // error จากตัวตู้เอง (vault_events) — ว่าง = ยังไม่เคยมีรายงานเข้ามา
         List<Issue> openIssues,
         int openIssueTotal,
         List<VaultIssueRow> vaults
