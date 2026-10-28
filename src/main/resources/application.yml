@@ -75,6 +75,13 @@ iot:
 session:
   item-ids: ${SESSION_ITEM_IDS:SESSION-PASS}
 
+# สถานะตู้ — เงียบนานเกินกี่นาทีถึงจะถือว่าขาดการติดต่อ
+# สัญญาเขียนว่าตู้ส่ง heartbeat ทุก 15 นาที แต่ของจริงวัดได้ค่ากลาง 45 นาที (ห่างสุด 54)
+# 100 นาที = พลาดราว 2 รอบ · ถ้า firmware เปลี่ยนจังหวะเมื่อไหร่ ปรับค่านี้ได้เลย
+vault:
+  status:
+    offline-after-minutes: ${VAULT_STATUS_OFFLINE_AFTER_MINUTES:100}
+
 # Vault Analytics — เครื่องมือ dev (สร้าง / ล้างข้อมูลทดสอบ) เปิดเฉพาะเครื่อง dev
 # ห้ามเปิดบน production — ปุ่มล้างข้อมูลลบทุกแถวที่รหัสขึ้นต้น SEED-
 analytics:
