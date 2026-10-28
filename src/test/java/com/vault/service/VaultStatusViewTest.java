@@ -34,6 +34,7 @@ class VaultStatusViewTest {
         VaultStatusView v = VaultStatusService.view(Optional.of(status("normal", NOW.minusMinutes(5))), NOW);
 
         assertThat(v.online()).isTrue();
+        assertThat(v.stale()).isFalse();
         assertThat(v.tone()).isEqualTo("ok");
         assertThat(v.stateLabel()).isEqualTo("ติดต่อได้");
         assertThat(v.lastSeenLabel()).isEqualTo("5 นาทีที่แล้ว");
@@ -48,6 +49,8 @@ class VaultStatusViewTest {
         assertThat(v.tone()).isEqualTo("bad");
         assertThat(v.stateLabel()).isEqualTo("ขาดการติดต่อ");
         assertThat(v.lastSeenLabel()).isEqualTo("2 ชม. ที่แล้ว");
+        // โหมดที่อ่านได้เป็นของเก่า ไม่ใช่สถานะตอนนี้ — หน้าเว็บต้องรู้เพื่อหรี่ให้เห็นว่าค้าง
+        assertThat(v.stale()).isTrue();
     }
 
     /** หายรอบเดียว (15 นาที) ยังไม่ถือว่าขาดการติดต่อ */

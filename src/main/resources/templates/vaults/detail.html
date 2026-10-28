@@ -46,16 +46,26 @@
                         <span class="detail-label">เวลา</span>
                         <span class="detail-value text-muted" th:text="${deviceStatus.lastSeenExact}">—</span>
                     </div>
-                    <div class="detail-row" th:if="${deviceStatus.reported}">
+
+                    <!-- ตู้เงียบแล้ว ค่าด้านล่างเป็นของเก่า — ต้องบอกให้ชัด ไม่งั้นอ่านเหมือนสถานะตอนนี้ -->
+                    <p class="text-muted small mt-2 mb-0" th:if="${deviceStatus.stale}">
+                        ค่าด้านล่างเป็นสิ่งที่ตู้รายงานไว้ครั้งสุดท้าย ไม่ใช่สถานะตอนนี้
+                        — กด “ขอสถานะเดี๋ยวนี้” เพื่อลองเรียกดูใหม่
+                    </p>
+
+                    <div class="detail-row" th:if="${deviceStatus.reported}"
+                         th:classappend="${deviceStatus.stale} ? 'opacity-50'">
                         <span class="detail-label">โหมด</span>
-                        <span class="detail-value" th:classappend="${deviceStatus.lockdown} ? 'text-warning'"
+                        <span class="detail-value" th:classappend="${deviceStatus.lockdown and !deviceStatus.stale} ? 'text-warning'"
                               th:text="${deviceStatus.modeLabel}">—</span>
                     </div>
-                    <div class="detail-row" th:if="${deviceStatus.itemsInLocker != null}">
+                    <div class="detail-row" th:if="${deviceStatus.itemsInLocker != null}"
+                         th:classappend="${deviceStatus.stale} ? 'opacity-50'">
                         <span class="detail-label">ของในตู้</span>
                         <span class="detail-value" th:text="${deviceStatus.itemsInLocker}">0</span>
                     </div>
-                    <div class="detail-row" th:if="${deviceStatus.itemsRentedOut != null}">
+                    <div class="detail-row" th:if="${deviceStatus.itemsRentedOut != null}"
+                         th:classappend="${deviceStatus.stale} ? 'opacity-50'">
                         <span class="detail-label">ถูกยืมออก</span>
                         <span class="detail-value" th:text="${deviceStatus.itemsRentedOut}">0</span>
                     </div>

@@ -9,6 +9,7 @@ package com.vault.dto;
 public record VaultStatusView(
     boolean reported,        // false = ยังไม่เคยมี heartbeat เข้ามาเลย
     boolean online,
+    boolean stale,           // เคยรายงานแต่ตอนนี้เงียบ — ค่าที่เหลือเป็นของเก่า ไม่ใช่สถานะตอนนี้
     String stateLabel,       // ติดต่อได้ / ขาดการติดต่อ / ยังไม่เคยรายงาน
     String tone,             // ok / warn / bad
     String mode,

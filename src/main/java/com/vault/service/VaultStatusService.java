@@ -72,7 +72,7 @@ public class VaultStatusService {
 
     static VaultStatusView view(Optional<VaultStatus> maybe, LocalDateTime now) {
         if (maybe.isEmpty()) {
-            return new VaultStatusView(false, false, "ยังไม่เคยรายงาน", "warn",
+            return new VaultStatusView(false, false, false, "ยังไม่เคยรายงาน", "warn",
                     null, "—", false, null, null, null, null, null, "—", "—");
         }
         VaultStatus s = maybe.get();
@@ -89,7 +89,7 @@ public class VaultStatusService {
             default -> s.getMode() != null ? s.getMode() : "—";
         };
 
-        return new VaultStatusView(true, online, stateLabel, tone, s.getMode(), modeLabel, lockdown,
+        return new VaultStatusView(true, online, !online, stateLabel, tone, s.getMode(), modeLabel, lockdown,
                 s.getItemsInLocker(), s.getItemsRentedOut(), s.getAvailableSlots(), s.getTotalSlots(),
                 s.getLastScanTime() != null ? s.getLastScanTime() : "—",
                 ago(since), s.getReceivedAt().format(EXACT));
