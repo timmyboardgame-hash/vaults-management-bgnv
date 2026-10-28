@@ -121,6 +121,18 @@ public class VaultWebController {
         }
     }
 
+    /** ขอสถานะเดี๋ยวนี้ — ตู้จะตอบกลับทาง topic status ในไม่กี่วินาที ไม่ได้ตอบกลับมาที่คำขอนี้ */
+    @PostMapping("/{vaultId}/request-status")
+    @ResponseBody
+    public ResponseEntity<String> requestStatus(@PathVariable String vaultId) {
+        try {
+            vaultService.requestStatus(vaultId);
+            return ResponseEntity.ok("sent");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     /** ปลด lockdown จากหน้า vault — ตู้ออกจาก lockdown เองไม่ได้ ต้องสั่งจากที่นี่ */
     @PostMapping("/{vaultId}/clear-lockdown")
     @ResponseBody

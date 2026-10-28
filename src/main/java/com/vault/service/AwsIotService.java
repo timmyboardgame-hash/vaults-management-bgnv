@@ -173,6 +173,21 @@ public class AwsIotService {
     }
 
     /**
+     * Publish cmd/system/request_status → kiosk (สัญญา §3.5)
+     *
+     * ขอ snapshot ทันทีแทนการรอ heartbeat รอบ 15 นาที — ตู้ตอบกลับขึ้น topic vault/{thing}/status
+     * ตามปกติ แล้ววิ่งผ่าน IoT rule → Lambda → /iot-status เหมือน heartbeat ทุกรอบ
+     */
+    public void publishRequestStatus(String thingName, String requestId) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishRequestStatus thing={}", thingName);
+            return;
+        }
+        publishMqtt("vault/" + thingName + "/cmd/system/request_status", requestId, Map.of());
+        log.info("[IoT] Published system/request_status thing={}", thingName);
+    }
+
+    /**
      * Publish cmd/system/clear_lockdown → kiosk (สัญญา §3.6)
      *
      * ตู้เข้า lockdown เองเมื่อมีคนแตะ tag ผิดครบ 3 ครั้ง และออกเองไม่ได้ ต้องสั่งปลดจากฝั่ง backend

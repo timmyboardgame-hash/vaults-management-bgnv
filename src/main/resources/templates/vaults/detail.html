@@ -52,6 +52,16 @@
                             <small class="text-muted ms-2" th:if="${deviceStatus.reported}"
                                    th:text="${deviceStatus.lastSeenLabel} + ' · ' + ${deviceStatus.lastSeenExact}">—</small>
                             <small class="text-muted ms-2" th:unless="${deviceStatus.reported}">ยังไม่เคยมี heartbeat เข้ามา</small>
+                            <!-- ตู้ตอบกลับทาง topic status ไม่ได้ตอบคำขอนี้ตรงๆ จึงต้องรอครู่หนึ่งแล้วโหลดหน้าใหม่ -->
+                            <button class="btn btn-ghost btn-sm ms-2" th:attr="data-vault=${vault.vaultId}"
+                                    x-data="{ asking: false }" :disabled="asking"
+                                    @click="asking = true;
+                                            fetch('/vaults/' + $el.dataset.vault + '/request-status', { method: 'POST' })
+                                              .then(r => r.ok ? setTimeout(() => window.location.reload(), 3000)
+                                                              : (asking = false, alert('ส่งคำสั่งไม่สำเร็จ')))">
+                                <span x-show="!asking"><i class="bi bi-arrow-clockwise me-1"></i>ขอสถานะเดี๋ยวนี้</span>
+                                <span x-show="asking">กำลังรอตู้ตอบ…</span>
+                            </button>
                         </span>
                     </div>
                     <div class="detail-row" th:if="${deviceStatus.reported}">
