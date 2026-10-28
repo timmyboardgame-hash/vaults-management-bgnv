@@ -31,6 +31,22 @@ public class VaultService {
     }
 
     /**
+     * ขอให้ตู้รายงานสถานะเดี๋ยวนี้ (สัญญา §3.5)
+     *
+     * ปกติตู้ส่ง heartbeat เองทุก 15 นาที คำสั่งนี้ไว้ใช้ตอนอยากรู้เดี๋ยวนั้น เช่นเพิ่งไปแตะตู้มา
+     * หรือสงสัยว่าตู้ยังมีชีวิตอยู่ไหม — ตู้จะตอบกลับทาง topic status ตามปกติ ไม่ได้ตอบกลับมาตรงๆ
+     * ฝั่งเราจึงได้แค่ "ส่งคำสั่งแล้ว" สถานะจริงจะมาอัปเดตอีกทีในไม่กี่วินาที
+     */
+    public Map<String, String> requestStatus(String vaultId) {
+        Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
+            .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
+
+        log.info("[VAULT] Status requested vault={} by={}", vaultId, currentUser());
+        awsIotService.publishRequestStatus(vault.effectiveThingName(), UUID.randomUUID().toString());
+        return Map.of("vaultId", vaultId, "status", "command_sent");
+    }
+
+    /**
      * ปลด lockdown ของตู้ (สัญญา §3.6)
      *
      * ตู้เข้า lockdown เองเมื่อแตะ tag ผิดครบ 3 ครั้ง แล้วออกเองไม่ได้ — ถ้าไม่มีปุ่มนี้คือทางตัน

@@ -70,6 +70,12 @@ public class VaultController {
         return ResponseEntity.ok(vaultService.forceUnlock(vaultId, request.reason()));
     }
 
+    // POST /api/v1/vaults/{vaultId}/request-status  — ขอ snapshot ทันที แทนรอ heartbeat รอบ 15 นาที
+    @PostMapping("/{vaultId}/request-status")
+    public ResponseEntity<Map<String, String>> requestStatus(@PathVariable String vaultId) {
+        return ResponseEntity.ok(vaultService.requestStatus(vaultId));
+    }
+
     // POST /api/v1/vaults/{vaultId}/clear-lockdown  — ปลด lockdown ที่ตู้เข้าเองจาก wrong tag ครบ 3 ครั้ง
     @PostMapping("/{vaultId}/clear-lockdown")
     public ResponseEntity<Map<String, String>> clearLockdown(

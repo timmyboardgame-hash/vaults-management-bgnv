@@ -27,17 +27,27 @@ public class VaultStatusService {
 
     private static final Logger log = LoggerFactory.getLogger(VaultStatusService.class);
 
-    /** เกิน 2 รอบ heartbeat ถือว่าขาดการติดต่อ — เผื่อสายหลุดรอบเดียวไม่ต้องตกใจ */
-    static final Duration OFFLINE_AFTER = Duration.ofMinutes(35);
+    /**
+     * เงียบนานเกินเท่านี้ถือว่าขาดการติดต่อ
+     *
+     * สัญญา §4.11 เขียนว่าตู้ส่งทุก 15 นาที แต่วัดจาก log จริง 2 วัน (68 ครั้ง) ได้ค่ากลาง 45 นาที
+     * ห่างสุด 53.8 นาที — ตั้ง 100 นาทีจึงเท่ากับพลาดราว 2 รอบ ยังเผื่อให้สายหลุดรอบเดียวได้
+     * ถ้าวันหลัง firmware เปลี่ยนจังหวะ แก้ที่ application.yml ได้โดยไม่ต้องแก้โค้ด
+     */
+    private final Duration offlineAfter;
 
     private static final DateTimeFormatter EXACT = DateTimeFormatter.ofPattern("d MMM HH:mm");
 
     private final VaultStatusRepository statusRepository;
     private final VaultRepository vaultRepository;
 
-    public VaultStatusService(VaultStatusRepository statusRepository, VaultRepository vaultRepository) {
+    public VaultStatusService(VaultStatusRepository statusRepository,
+                              VaultRepository vaultRepository,
+                              @org.springframework.beans.factory.annotation.Value(
+                                  "${vault.status.offline-after-minutes:100}") long offlineAfterMinutes) {
         this.statusRepository = statusRepository;
         this.vaultRepository = vaultRepository;
+        this.offlineAfter = Duration.ofMinutes(offlineAfterMinutes);
     }
 
     /** รับ heartbeat — ทับแถวเดิมของตู้นั้นเสมอ */
@@ -67,17 +77,17 @@ public class VaultStatusService {
 
     /** สถานะที่จะเอาไปแสดงบนหน้า vault */
     public VaultStatusView view(String vaultId) {
-        return view(statusRepository.findByVaultId(vaultId), LocalDateTime.now());
+        return view(statusRepository.findByVaultId(vaultId), LocalDateTime.now(), offlineAfter);
     }
 
-    static VaultStatusView view(Optional<VaultStatus> maybe, LocalDateTime now) {
+    static VaultStatusView view(Optional<VaultStatus> maybe, LocalDateTime now, Duration offlineAfter) {
         if (maybe.isEmpty()) {
-            return new VaultStatusView(false, false, "ยังไม่เคยรายงาน", "warn",
+            return new VaultStatusView(false, false, false, "ยังไม่เคยรายงาน", "warn",
                     null, "—", false, null, null, null, null, null, "—", "—");
         }
         VaultStatus s = maybe.get();
         Duration since = Duration.between(s.getReceivedAt(), now);
-        boolean online = since.compareTo(OFFLINE_AFTER) <= 0;
+        boolean online = since.compareTo(offlineAfter) <= 0;
         boolean lockdown = "lockdown".equals(s.getMode());
 
         String tone = !online ? "bad" : lockdown ? "warn" : "ok";
@@ -89,7 +99,7 @@ public class VaultStatusService {
             default -> s.getMode() != null ? s.getMode() : "—";
         };
 
-        return new VaultStatusView(true, online, stateLabel, tone, s.getMode(), modeLabel, lockdown,
+        return new VaultStatusView(true, online, !online, stateLabel, tone, s.getMode(), modeLabel, lockdown,
                 s.getItemsInLocker(), s.getItemsRentedOut(), s.getAvailableSlots(), s.getTotalSlots(),
                 s.getLastScanTime() != null ? s.getLastScanTime() : "—",
                 ago(since), s.getReceivedAt().format(EXACT));
