@@ -346,6 +346,49 @@
 
                 <section class="va-panel">
                     <div class="va-panel-h">
+                        <h3>error จากตัวตู้ ล่าสุด</h3>
+                        <span class="va-note" th:text="${p.problems.deviceEventTotal} + ' รายการในช่วงนี้'">0 รายการในช่วงนี้</span>
+                    </div>
+                    <p class="va-why">
+                        แผงยอดรวมข้างบนบอกว่าเรื่องอะไรเกิดบ่อย ตารางนี้บอกว่าเกิดเมื่อไหร่ ตู้ไหน และตู้บอกรายละเอียดมาว่าอะไร ·
+                        แถวที่ไม่มีรหัสตู้คือ thing ที่ยังไม่ได้ลงทะเบียนในระบบ
+                    </p>
+                    <div class="va-tw" th:unless="${p.problems.deviceEventLog.isEmpty()}">
+                        <table class="va-table">
+                            <thead><tr><th class="sev">เวลา</th><th>ตู้</th><th>ชนิด</th><th>ตู้บอกว่า</th></tr></thead>
+                            <tbody>
+                            <tr th:each="e : ${p.problems.deviceEventLog}" th:class="'sev-' + ${e.tone}">
+                                <td class="sev va-nowrap">
+                                    <span th:text="${e.whenLabel}">—</span>
+                                    <div class="va-sub" th:text="${e.age} + ' ที่แล้ว'">—</div>
+                                </td>
+                                <td class="va-nowrap">
+                                    <span th:if="${e.vaultId != null}" th:text="${e.vaultId}">vt-001</span>
+                                    <span th:if="${e.vaultId == null}" class="va-warn">ยังไม่ลงทะเบียน</span>
+                                    <!-- ชื่อ thing โชว์เฉพาะตอนไม่ตรงกับรหัสตู้ ไม่งั้นได้บรรทัดซ้ำเปล่า ๆ -->
+                                    <div class="va-sub" th:if="${e.thingName != e.vaultId}" th:text="${e.thingName}">thing</div>
+                                </td>
+                                <td class="va-nowrap">
+                                    <code th:text="${e.errorType}">rs485_timeout</code>
+                                    <div class="va-sub" th:classappend="'va-' + ${e.tone}" th:text="${e.severity}">error</div>
+                                </td>
+                                <td>
+                                    <span th:text="${e.message != null} ? ${e.message} : 'ตู้ไม่ได้ส่งข้อความมา'"
+                                          th:classappend="${e.message == null} ? 'va-sub'">—</span>
+                                    <div class="va-sub" th:if="${e.requestId != null}"
+                                         th:text="'จากคำสั่ง ' + ${e.requestId}">จากคำสั่ง req-1</div>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="va-empty" th:if="${p.problems.deviceEventLog.isEmpty()}">ยังไม่มีรายงานจากตัวตู้ในช่วงนี้</p>
+                    <p class="va-note mt-2 mb-0" th:if="${p.problems.deviceEventTotal > p.problems.deviceEventLog.size()}"
+                       th:text="'แสดง ' + ${p.problems.deviceEventLog.size()} + ' รายการล่าสุด'">—</p>
+                </section>
+
+                <section class="va-panel">
+                    <div class="va-panel-h">
                         <h3 th:text="${p.filter.vaultId == null} ? 'ตู้เรียงตามปัญหา' : 'เทียบกับตู้อื่น'">ตู้เรียงตามปัญหา</h3>
                         <span class="va-note" th:text="${p.filter.vaultId == null} ? 'กดรหัสตู้เพื่อกรองทั้งหน้า' : 'ตารางนี้ไม่ถูกกรองตามตู้ที่เลือก'">กดรหัสตู้เพื่อกรองทั้งหน้า</span>
                     </div>

@@ -3,6 +3,7 @@ package com.vault.service;
 import com.vault.dto.VaultAnalyticsDto.BarRow;
 import com.vault.dto.VaultAnalyticsDto.BookingPage;
 import com.vault.dto.VaultAnalyticsDto.BookingRow;
+import com.vault.dto.VaultAnalyticsDto.DeviceEventRow;
 import com.vault.dto.VaultAnalyticsDto.Filter;
 import com.vault.dto.VaultAnalyticsDto.Flag;
 import com.vault.dto.VaultAnalyticsDto.HeatCell;
@@ -23,6 +24,7 @@ import com.vault.entity.BorrowRecord;
 import com.vault.entity.DailyItemStat;
 import com.vault.entity.DailyVaultStat;
 import com.vault.entity.Vault;
+import com.vault.entity.VaultEvent;
 import com.vault.repository.BookingRepository;
 import com.vault.repository.BookingStatusEventRepository;
 import com.vault.repository.BorrowRecordRepository;
@@ -76,6 +78,8 @@ public class VaultStatsService {
     private static final int PAGE_SIZE = 50;
     private static final int STUCK_PENDING_MINUTES = 15;
     private static final int MAX_OPEN_ISSUES = 20;
+    /** รายการ error จากตัวตู้ที่โชว์บนหน้า — มากกว่านี้ตารางยาวกว่าที่ใครจะอ่านไหว */
+    private static final int MAX_DEVICE_EVENTS = 15;
     private static final Set<String> TERMINAL = Set.of("RETURNED", "CANCELLED", "FAILED");
 
     private static final String[] TH_MONTH = {"ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
@@ -467,6 +471,14 @@ public class VaultStatsService {
                     width(count, errMax), "error".equals(severity)));
         }
 
+        // รายการล่าสุดของ event เดียวกันนั้น — ยอดรวมข้างบนไม่บอกว่าเกิดเมื่อไหร่ ตู้ไหน
+        String evScope = scopeId == null ? "" : scopeId;
+        long eventTotal = vaultEventRepository.countInRange(evScope, evFrom, evTo);
+        LocalDateTime evNow = LocalDateTime.now();
+        List<DeviceEventRow> deviceEventLog = vaultEventRepository
+                .findRecent(evScope, evFrom, evTo, PageRequest.of(0, MAX_DEVICE_EVENTS))
+                .stream().map(e -> logRow(e, evNow)).toList();
+
         List<Issue> issues = openIssues(inScope);
 
         Map<String, List<DailyVaultStat>> byVault = allRows.stream()
@@ -481,8 +493,41 @@ public class VaultStatsService {
         }).sorted(Comparator.comparingLong((VaultIssueRow r) -> r.unpaired() + r.lateEvents() + r.anomalies()).reversed())
           .toList();
 
-        return new Problems(kpis, trend, anomalies, deviceErrors,
+        return new Problems(kpis, trend, anomalies, deviceErrors, deviceEventLog, eventTotal,
                 issues.stream().limit(MAX_OPEN_ISSUES).toList(), issues.size(), vaultRows);
+    }
+
+    /**
+     * หนึ่งแถวในรายการ error จากตัวตู้
+     *
+     * ค่าที่ว่างคืนเป็น null ให้หน้าเว็บตัดสินใจเองว่าจะโชว์ "—" หรือซ่อนบรรทัดนั้นไปเลย
+     * ดีกว่าให้ service ยัดขีดกลางมาแล้ว เพราะตารางกับ API ต้องการไม่เหมือนกัน
+     */
+    static DeviceEventRow logRow(VaultEvent e, LocalDateTime now) {
+        return new DeviceEventRow(
+                dateTimeLabel(e.getOccurredAt()),
+                age(e.getOccurredAt(), now),
+                e.getVault() != null ? e.getVault().getVaultId() : null,
+                e.getThingName(),
+                e.getErrorType(),
+                e.getSeverity(),
+                tone(e.getSeverity()),
+                blankToNull(e.getErrorMessage()),
+                blankToNull(e.getRequestId()));
+    }
+
+    /** severity → สีแถบ ให้ตรงกับแผงยอดรวมที่ใช้ error = แดง อย่างอื่น = เหลือง */
+    private static String tone(String severity) {
+        return switch (severity == null ? "" : severity) {
+            case "error" -> "bad";
+            case "warning" -> "warn";
+            case "info" -> "ok";
+            default -> "warn";   // ชนิดที่ยังไม่รู้จัก — เตือนไว้ก่อน ดีกว่าเงียบ
+        };
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     /** ปัญหาที่ค้างอยู่ตอนนี้ — สถานะที่ระบบปิดเองไม่ได้แล้ว อ่านสดจาก bookings ไม่ใช่จากตารางสรุป */
