@@ -87,11 +87,31 @@ public class VaultAnalyticsDto {
         String severity
     ) {}
 
+    /**
+     * system event ของตัวตู้แบบรายการ (vault_events) — คู่กับยอดรวมใน deviceErrors
+     *
+     * ยอดรวมบอกว่าเรื่องอะไรเกิดบ่อย แถวพวกนี้บอกว่าเกิดเมื่อไหร่ ตู้ไหน และตู้บอกรายละเอียดมาว่าอะไร
+     * vaultId เป็น null ได้ เมื่อ event มาจาก thing ที่ยังไม่มีตู้ไหนในระบบผูกไว้
+     */
+    public record DeviceEventRow(
+        String whenLabel,
+        String age,
+        String vaultId,
+        String thingName,
+        String errorType,
+        String severity,     // info / warning / error ตามที่ตู้ส่งมา
+        String tone,         // bad / warn / ok — แปลงจาก severity ไว้แต่งแถบซ้ายของแถว
+        String message,
+        String requestId
+    ) {}
+
     public record Problems(
         List<Kpi> kpis,
         List<ProblemPoint> trend,
         List<BarRow> anomalies,
         List<BarRow> deviceErrors,   // error จากตัวตู้เอง (vault_events) — ว่าง = ยังไม่เคยมีรายงานเข้ามา
+        List<DeviceEventRow> deviceEventLog,
+        long deviceEventTotal,       // ทั้งช่วง ก่อนตัดเหลือเท่าที่โชว์
         List<Issue> openIssues,
         int openIssueTotal,
         List<VaultIssueRow> vaults

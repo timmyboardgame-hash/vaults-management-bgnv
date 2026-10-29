@@ -1,6 +1,7 @@
 package com.vault.repository;
 
 import com.vault.entity.VaultEvent;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,12 +28,26 @@ public interface VaultEventRepository extends JpaRepository<VaultEvent, String> 
                                        @Param("from") LocalDateTime from,
                                        @Param("to") LocalDateTime to);
 
-    /** รายการล่าสุด ใช้โชว์ว่าเพิ่งเกิดอะไรขึ้นบ้าง */
-    @Query("SELECT e FROM VaultEvent e LEFT JOIN FETCH e.vault " +
+    /**
+     * รายการล่าสุด ใช้โชว์ว่าเพิ่งเกิดอะไรขึ้นบ้าง — vaultId = "" คือดูทุกตู้
+     *
+     * ต้องเทียบผ่าน alias v ของ LEFT JOIN · ถ้าเขียน e.vault.vaultId ตรง ๆ Hibernate จะ
+     * ทำ inner join แล้ว event ที่ยังไม่ผูกตู้จะหายไปแม้ตอนดูทุกตู้
+     */
+    @Query("SELECT e FROM VaultEvent e LEFT JOIN FETCH e.vault v " +
            "WHERE e.occurredAt >= :from AND e.occurredAt < :to " +
-           "AND (:vaultId = '' OR e.vault.vaultId = :vaultId) " +
+           "AND (:vaultId = '' OR v.vaultId = :vaultId) " +
            "ORDER BY e.occurredAt DESC")
     List<VaultEvent> findRecent(@Param("vaultId") String vaultId,
                                 @Param("from") LocalDateTime from,
-                                @Param("to") LocalDateTime to);
+                                @Param("to") LocalDateTime to,
+                                Pageable pageable);
+
+    /** จำนวนทั้งหมดในช่วง — ใช้บอกว่ารายการที่โชว์เป็นส่วนหนึ่งของเท่าไหร่ */
+    @Query("SELECT COUNT(e) FROM VaultEvent e LEFT JOIN e.vault v " +
+           "WHERE e.occurredAt >= :from AND e.occurredAt < :to " +
+           "AND (:vaultId = '' OR v.vaultId = :vaultId)")
+    long countInRange(@Param("vaultId") String vaultId,
+                      @Param("from") LocalDateTime from,
+                      @Param("to") LocalDateTime to);
 }
