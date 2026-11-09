@@ -138,6 +138,13 @@ public class BookingService {
             throw new IllegalArgumentException("Copy already booked: serial=" + serial);
         }
 
+        // กล่องที่ร้านลงทะเบียนไว้แต่ยังไม่ได้เอาเข้าตู้ — จองไม่ได้ และต้องบอกให้ชัด
+        // ไม่ใช่ปล่อยให้ระเบิดเป็น NPE ตรง getVault() ให้คนเรียก API เดาเอง
+        if (!vaultItem.isInVault()) {
+            throw new IllegalArgumentException(
+                "Item copy is not in a vault yet: serial=" + serial);
+        }
+
         String vaultId = vaultItem.getVault().getVaultId();
         String thingName = vaultItem.getVault().effectiveThingName();
         bindingRepository.findActiveByAgentAndVault(agentId, vaultId)

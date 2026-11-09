@@ -7,17 +7,39 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "vault_items")
+@Table(name = "vault_items", indexes = {
+    // สอง lookup นี้วิ่งทุกครั้งที่ลงทะเบียนกล่องและทุกครั้งที่สร้าง booking
+    // ไม่ใช่ unique constraint เพราะความซ้ำต้องตรวจแบบรู้จัก soft delete — แถวที่ลบแล้วใช้เลขเดิมซ้ำได้
+    @Index(name = "idx_vault_items_serial", columnList = "serial_number"),
+    @Index(name = "idx_vault_items_rfid_tag", columnList = "rfid_tag")
+})
 public class VaultItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    // vault_id FK → vaults.id
+    /**
+     * ที่อยู่ของกล่อง — ตู้ที่กล่องนี้ถูกวางไว้
+     *
+     * null ได้ตั้งแต่มี API ลงทะเบียนจากแอปร้าน เพราะร้านลงทะเบียนตอนกล่องยังอยู่ในมือ
+     * ยังไม่ได้เอาเข้าตู้ · กล่องที่ยังไม่มีตู้จะจองไม่ได้จนกว่าจะมีคนระบุตู้ให้
+     *
+     * query ที่ดึง copy ต้องใช้ LEFT JOIN กับ vault เสมอ ไม่งั้นกล่องกลุ่มนี้หายเงียบ ๆ
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vault_id", nullable = false)
+    @JoinColumn(name = "vault_id")
     private Vault vault;
+
+    /**
+     * เจ้าของกล่อง — ร้านที่ลงทะเบียนกล่องนี้เข้ามา
+     *
+     * คนละเรื่องกับตู้: เจ้าของแทบไม่เปลี่ยน ส่วนตู้ย้ายได้เรื่อย ๆ และว่างได้
+     * null = กล่องที่ผูกจากหน้าหลังบ้านก่อนจะมี API ลงทะเบียน — เจ้าของอนุมานจากตู้เหมือนเดิม
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_agent_id")
+    private Agent ownerAgent;
 
     // item_id FK → items.id
     @ManyToOne(fetch = FetchType.LAZY)
@@ -56,6 +78,15 @@ public class VaultItem {
 
     public Vault getVault() { return vault; }
     public void setVault(Vault vault) { this.vault = vault; }
+
+    public Agent getOwnerAgent() { return ownerAgent; }
+    public void setOwnerAgent(Agent ownerAgent) { this.ownerAgent = ownerAgent; }
+
+    /** กล่องอยู่ในตู้แล้วหรือยัง — ใช้ตัดสินว่าจองได้ไหม */
+    public boolean isInVault() { return vault != null; }
+
+    /** รหัสร้านเจ้าของ · กล่องเก่าที่ยังไม่มีเจ้าของจะคืน null */
+    public String ownerAgentId() { return ownerAgent != null ? ownerAgent.getAgentId() : null; }
 
     public Item getItem() { return item; }
     public void setItem(Item item) { this.item = item; }

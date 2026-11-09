@@ -64,7 +64,8 @@ public class VaultWebController {
             model.addAttribute("boundAgents", bindingService.listByVault(vaultId));
             model.addAttribute("deviceStatus", vaultStatusService.view(vaultId));
 
-            // เฉพาะ item ที่ยังไม่มี active VaultItem (ไม่ว่าจะอยู่ใน vault ไหนก็ตาม)
+            // เฉพาะ item ที่ยังไม่มี active VaultItem เลย — นับกล่องที่ลงทะเบียนไว้แต่ยังไม่เข้าตู้ด้วย
+            // ของที่ลงทะเบียนมาแล้วควรเอากล่องนั้นเข้าตู้ ไม่ใช่สร้างกล่องใหม่ซ้อนเข้าไปอีกใบ
             var allBoundItemIds = vaultItemService.listAllActive().stream()
                     .map(vi -> vi.itemId())
                     .collect(java.util.stream.Collectors.toSet());
