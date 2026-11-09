@@ -219,6 +219,34 @@ public class AwsIotService {
         log.info("[IoT] Published booking/cancel booking={} thing={}", bookingId, thingName);
     }
 
+    /**
+     * Publish cmd/inventory/sync → kiosk (สัญญา §3.7)
+     *
+     * บอกตู้ว่าแท็กไหนคือเกมอะไร · ถ้าไม่ส่ง ตู้จะมองแท็กที่เพิ่งลงทะเบียนเป็นของแปลกปลอม
+     * แตะผิดครบ 3 ครั้งตู้เข้า lockdown เอง แล้วออกเองไม่ได้
+     *
+     * mode=replace ล้างของเดิมแล้วใส่ใหม่ทั้งชุด · upsert เพิ่ม/ทับรายตัว ไม่ลบของเดิม
+     *
+     * ตู้ไม่มี ack event ให้ — ถือว่าสำเร็จถ้าไม่มี events/system/error กลับมาใน 5 วินาที
+     * (error จะถูกเก็บลง vault_events แล้วไปโผล่ที่หน้า analytics ตามทางเดิม)
+     *
+     * 1 แถวผิด = ตู้ปฏิเสธทั้ง batch จึงต้องกรองให้สะอาดก่อนมาถึงที่นี่
+     */
+    public void publishInventorySync(String thingName, String requestId, String mode,
+                                     List<Map<String, String>> mappings) {
+        if (!isConfigured()) {
+            log.warn("[IoT] Not configured — skipping publishInventorySync thing={}", thingName);
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("mode",     mode);
+        payload.put("mappings", mappings);
+
+        publishMqtt("vault/" + thingName + "/cmd/inventory/sync", requestId, payload);
+        log.info("[IoT] Published inventory/sync thing={} mode={} mappings={}",
+            thingName, mode, mappings.size());
+    }
+
     // ── Device State ────────────────────────────────────────────────────────
 
     /** อ่าน Device Shadow — ใช้แสดง vault status ใน UI */

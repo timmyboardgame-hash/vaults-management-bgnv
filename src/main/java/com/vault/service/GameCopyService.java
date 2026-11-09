@@ -10,6 +10,7 @@ import com.vault.entity.Binding;
 import com.vault.entity.Item;
 import com.vault.entity.Vault;
 import com.vault.entity.VaultItem;
+import com.vault.event.VaultInventoryChanged;
 import com.vault.exception.ApiCodeException;
 import com.vault.repository.AgentRepository;
 import com.vault.repository.BindingRepository;
@@ -58,6 +59,9 @@ public class GameCopyService {
     private final BindingRepository bindingRepository;
     private final BookingRepository bookingRepository;
 
+    /** แจ้งว่าของในตู้เปลี่ยน — ตัว sync รอ commit แล้วส่งรายการแท็กไปให้ตู้ */
+    private final org.springframework.context.ApplicationEventPublisher events;
+
     /**
      * ตัวเองผ่าน proxy — ต้องใช้ตอน batch เรียก register() รายกล่อง
      * ถ้าเรียก this.register() ตรง ๆ จะข้าม proxy ไป @Transactional ไม่ทำงาน
@@ -72,9 +76,11 @@ public class GameCopyService {
                            ItemRepository itemRepository,
                            BindingRepository bindingRepository,
                            BookingRepository bookingRepository,
+                           org.springframework.context.ApplicationEventPublisher events,
                            org.springframework.beans.factory.ObjectProvider<GameCopyService> selfProvider) {
         this(vaultItemRepository, vaultRepository, agentRepository, itemRepository,
-             bindingRepository, bookingRepository, (Supplier<GameCopyService>) selfProvider::getObject);
+             bindingRepository, bookingRepository, events,
+             (Supplier<GameCopyService>) selfProvider::getObject);
     }
 
     /** ใช้ในเทส — ส่ง supplier ของตัวเองเข้ามาตรง ๆ ได้ ไม่ต้องพึ่ง container */
@@ -84,7 +90,9 @@ public class GameCopyService {
                     ItemRepository itemRepository,
                     BindingRepository bindingRepository,
                     BookingRepository bookingRepository,
+                    org.springframework.context.ApplicationEventPublisher events,
                     Supplier<GameCopyService> self) {
+        this.events = events;
         this.self = self;
         this.vaultItemRepository = vaultItemRepository;
         this.vaultRepository = vaultRepository;
@@ -144,6 +152,9 @@ public class GameCopyService {
         log.info("[GAME_COPY] Registered serial={} tag={} shop={} item={} vault={}",
                 serial, rfidTag, shopId, resolved.item().getItemId(),
                 vault != null ? vault.getVaultId() : "UNASSIGNED");
+
+        // กล่องที่ยังไม่มีตู้ไม่ต้อง sync — ยังไม่มีตู้ไหนต้องรู้จักแท็กนี้
+        inventoryChanged(vault, "copy-registered");
 
         return new Registration(toResponse(saved, resolved.created()), true);
     }
@@ -230,6 +241,7 @@ public class GameCopyService {
     @Transactional
     public GameCopyResponse update(String serialNumber, UpdateGameCopyRequest req) {
         VaultItem copy = requireCopy(serialNumber);
+        Vault vaultBefore = copy.getVault();
 
         String newTag = trimmed(req.rfidTag());
         if (newTag != null && !newTag.equalsIgnoreCase(copy.getRfidTag())) {
@@ -257,6 +269,10 @@ public class GameCopyService {
         VaultItem saved = vaultItemRepository.save(copy);
         log.info("[GAME_COPY] Updated serial={} tag={} vault={}", serialNumber, saved.getRfidTag(),
                 saved.getVault() != null ? saved.getVault().getVaultId() : "UNASSIGNED");
+
+        // ย้ายตู้ต้อง sync ทั้งสองฝั่ง — ตู้เดิมต้องรู้ว่าของไม่อยู่แล้ว
+        inventoryChanged(vaultBefore, saved.getVault(), "copy-updated");
+
         return toResponse(saved, false);
     }
 
@@ -268,9 +284,30 @@ public class GameCopyService {
         copy.setDeletedAt(LocalDateTime.now());
         vaultItemRepository.save(copy);
         log.info("[GAME_COPY] Soft-deleted serial={}", serialNumber);
+
+        // ถอดกล่องออกจากระบบแล้ว ตู้ต้องเลิกรู้จักแท็กนี้ด้วย
+        inventoryChanged(copy.getVault(), "copy-deleted");
     }
 
     // ───────────────────────────── ตัวช่วย ─────────────────────────────
+
+    /** ตู้ไหนของเปลี่ยน ตู้นั้นต้องได้รายการแท็กชุดใหม่ — ส่งจริงหลัง commit */
+    private void inventoryChanged(Vault vault, String reason) {
+        if (vault == null) return;
+        events.publishEvent(new VaultInventoryChanged(vault.getVaultId(), reason));
+    }
+
+    /**
+     * ของย้ายจากตู้หนึ่งไปอีกตู้ — ทั้งสองฝั่งต้องได้รายการใหม่
+     * ตู้เดียวกัน (เช่นแก้แค่แท็ก) ส่งครั้งเดียว ไม่ต้องยิงซ้ำสองรอบให้ตู้เดิม
+     */
+    private void inventoryChanged(Vault before, Vault after, String reason) {
+        inventoryChanged(before, reason);
+        String beforeId = before != null ? before.getVaultId() : null;
+        if (after != null && !after.getVaultId().equals(beforeId)) {
+            inventoryChanged(after, reason);
+        }
+    }
 
     private Agent requireShop(String shopId) {
         return agentRepository.findByAgentIdAndDeletedAtIsNull(shopId)

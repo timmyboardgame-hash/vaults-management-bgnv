@@ -9,6 +9,7 @@ import com.vault.entity.Binding;
 import com.vault.entity.Item;
 import com.vault.entity.Vault;
 import com.vault.entity.VaultItem;
+import com.vault.event.VaultInventoryChanged;
 import com.vault.exception.ApiCodeException;
 import com.vault.repository.AgentRepository;
 import com.vault.repository.BindingRepository;
@@ -49,9 +50,12 @@ class GameCopyServiceTest {
     private final BindingRepository bindings = mock(BindingRepository.class);
     private final BookingRepository bookings = mock(BookingRepository.class);
 
+    private final org.springframework.context.ApplicationEventPublisher events =
+            mock(org.springframework.context.ApplicationEventPublisher.class);
+
     // batch เรียกตัวเองผ่าน supplier นี้ — ในเทสชี้กลับมาที่ instance เดิมได้เลย
     private final GameCopyService service =
-            new GameCopyService(copies, vaults, agents, items, bindings, bookings, () -> this.service);
+            new GameCopyService(copies, vaults, agents, items, bindings, bookings, events, () -> this.service);
 
     private static Agent shop(String agentId) {
         Agent a = new Agent();
@@ -197,6 +201,30 @@ class GameCopyServiceTest {
         assertThatThrownBy(() -> service.register("shop-001", req("SN-1", TAG, "vt-009")))
                 .satisfies(e -> assertThat(code(e)).isEqualTo("VAULT_NOT_BOUND_TO_SHOP"));
         verify(copies, never()).save(any());
+    }
+
+    // ───────────────── บอกตู้ว่าของเปลี่ยน ─────────────────
+
+    /** ตู้ต้องได้รายการแท็กชุดใหม่ ไม่งั้นแตะกล่องที่เพิ่งลงทะเบียนแล้วตู้มองเป็นของแปลกปลอม */
+    @Test
+    void copyPlacedInVault_asksForAnInventorySync() {
+        Binding b = new Binding();
+        b.setVault(vault("vt-001"));
+        when(bindings.findActiveByAgentId("shop-001")).thenReturn(List.of(b));
+
+        service.register("shop-001", req("SN-1", TAG, null));
+
+        var e = org.mockito.ArgumentCaptor.forClass(VaultInventoryChanged.class);
+        verify(events).publishEvent(e.capture());
+        assertThat(e.getValue().vaultId()).isEqualTo("vt-001");
+    }
+
+    /** กล่องที่ยังไม่มีตู้ ยังไม่มีตู้ไหนต้องรู้จักแท็กนี้ — ไม่ต้องยิงอะไรออกไป */
+    @Test
+    void unassignedCopy_doesNotSyncAnyLocker() {
+        service.register("shop-001", req("SN-1", TAG, null));
+
+        verify(events, never()).publishEvent(any(VaultInventoryChanged.class));
     }
 
     // ───────────────── catalog เกม ─────────────────

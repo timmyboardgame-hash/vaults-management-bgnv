@@ -23,10 +23,13 @@ public class VaultWebController {
     private final ItemService itemService;
     private final BindingService bindingService;
     private final com.vault.service.VaultStatusService vaultStatusService;
+    private final com.vault.service.VaultInventoryService vaultInventoryService;
 
     public VaultWebController(VaultService vaultService, VaultItemService vaultItemService,
                               ItemService itemService, BindingService bindingService,
-                              com.vault.service.VaultStatusService vaultStatusService) {
+                              com.vault.service.VaultStatusService vaultStatusService,
+                              com.vault.service.VaultInventoryService vaultInventoryService) {
+        this.vaultInventoryService = vaultInventoryService;
         this.vaultService = vaultService;
         this.vaultItemService = vaultItemService;
         this.itemService = itemService;
@@ -72,6 +75,13 @@ public class VaultWebController {
             var availableItems = itemService.listItems().stream()
                     .filter(i -> !allBoundItemIds.contains(i.itemId()))
                     .toList();
+            // ตู้รู้จักกล่องจากแท็ก กล่องที่ไม่มีแท็กตู้ชี้ไม่ได้ — ต้องเห็นตัวเลขนี้ก่อนจะไปงงหน้าตู้
+            model.addAttribute("syncableTags", vaultInventoryService.countSyncable(vaultId).orElse(0));
+            model.addAttribute("untaggedCopies", vaultItems.stream()
+                    .filter(vi -> "ACTIVE".equals(vi.status()))
+                    .filter(vi -> vi.rfidTag() == null || vi.rfidTag().isBlank())
+                    .count());
+
             model.addAttribute("allItems", availableItems);
             return "vaults/detail";
         }).orElse("redirect:/vaults");
@@ -129,6 +139,29 @@ public class VaultWebController {
         try {
             vaultService.requestStatus(vaultId);
             return ResponseEntity.ok("sent");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
+     * ส่งรายการแท็กทั้งชุดของตู้นี้ไปให้ตู้อีกครั้ง
+     *
+     * ปกติ sync เองทุกครั้งที่ของในตู้เปลี่ยน · ปุ่มนี้ไว้ซ่อมตอนที่ตู้ offline ไปตอนนั้น
+     * แล้วพลาดคำสั่งไป — ตู้ไม่มี ack ให้เรารู้ เลยต้องมีทางสั่งซ้ำด้วยมือ
+     */
+    @PostMapping("/{vaultId}/sync-inventory")
+    @ResponseBody
+    public ResponseEntity<String> syncInventory(@PathVariable String vaultId) {
+        try {
+            var r = vaultInventoryService.syncVault(vaultId);
+            if (!r.published()) {
+                return ResponseEntity.badRequest().body("ยังไม่ได้ตั้งค่า AWS IoT — คำสั่งไม่ได้ถูกส่งออกไป");
+            }
+            String msg = "ส่งรายการ " + r.sent() + " แท็กไปให้ตู้แล้ว";
+            if (r.skippedNoTag() > 0) msg += " · ข้าม " + r.skippedNoTag() + " กล่องที่ยังไม่ได้แปะแท็ก";
+            if (r.skippedBadTag() > 0) msg += " · ข้าม " + r.skippedBadTag() + " กล่องที่แท็กผิดรูปแบบ";
+            return ResponseEntity.ok(msg);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

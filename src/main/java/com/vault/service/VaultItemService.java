@@ -25,10 +25,15 @@ public class VaultItemService {
     private final ItemRepository itemRepository;
     private final com.vault.repository.BookingRepository bookingRepository;
 
+    /** แจ้งว่าของในตู้เปลี่ยน — ตัว sync รอ commit แล้วส่งรายการแท็กไปให้ตู้ */
+    private final org.springframework.context.ApplicationEventPublisher events;
+
     public VaultItemService(VaultItemRepository vaultItemRepository,
                             VaultRepository vaultRepository,
                             ItemRepository itemRepository,
-                            com.vault.repository.BookingRepository bookingRepository) {
+                            com.vault.repository.BookingRepository bookingRepository,
+                            org.springframework.context.ApplicationEventPublisher events) {
+        this.events = events;
         this.vaultItemRepository = vaultItemRepository;
         this.vaultRepository = vaultRepository;
         this.itemRepository = itemRepository;
@@ -86,7 +91,9 @@ public class VaultItemService {
         vaultItem.setRfidTag(tag);
         vaultItem.setStatus("ACTIVE");
 
-        return toResponse(vaultItemRepository.save(vaultItem));
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vaultItem));
+        inventoryChanged(vault, "copy-bound");
+        return saved;
     }
 
     /**
@@ -99,6 +106,7 @@ public class VaultItemService {
     public VaultItemResponse assignVault(String vaultItemId, String vaultId) {
         VaultItem vi = vaultItemRepository.findById(vaultItemId)
                 .orElseThrow(() -> new IllegalArgumentException("VaultItem not found: " + vaultItemId));
+        Vault vaultBefore = vi.getVault();
 
         if (vaultId == null || vaultId.isBlank()) {
             // ถอดออกจากตู้แต่ยังไม่ลบกล่อง — กล่องกลับไปอยู่สถานะรอเข้าตู้
@@ -112,7 +120,15 @@ public class VaultItemService {
 
         log.info("[VAULT_ITEM] Placement vaultItem={} vault={}", vaultItemId,
                 vaultId != null && !vaultId.isBlank() ? vaultId : "UNASSIGNED");
-        return toResponse(vaultItemRepository.save(vi));
+
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vi));
+        // ย้ายตู้ต้อง sync ทั้งสองฝั่ง — ตู้เดิมต้องรู้ว่าของไม่อยู่แล้ว
+        inventoryChanged(vaultBefore, "copy-moved");
+        Vault vaultAfter = vi.getVault();
+        if (vaultAfter != null && (vaultBefore == null || !vaultAfter.getVaultId().equals(vaultBefore.getVaultId()))) {
+            inventoryChanged(vaultAfter, "copy-moved");
+        }
+        return saved;
     }
 
     @Transactional
@@ -123,6 +139,8 @@ public class VaultItemService {
         vi.setStatus("INACTIVE");
         vi.setDeletedAt(LocalDateTime.now());
         vaultItemRepository.save(vi);
+        // ถอดกล่องออกแล้ว ตู้ต้องเลิกรู้จักแท็กนี้
+        inventoryChanged(vi.getVault(), "copy-unbound");
     }
 
     @Transactional
@@ -149,7 +167,17 @@ public class VaultItemService {
         String newTag = rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null;
         requireTagFree(newTag, vi.getId());
         vi.setRfidTag(newTag);
-        return toResponse(vaultItemRepository.save(vi));
+
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vi));
+        // เปลี่ยนแท็กแล้วไม่บอกตู้ = ตู้ยังจำแท็กเดิม ของใบนี้จะกลายเป็นแท็กแปลกปลอม
+        inventoryChanged(vi.getVault(), "tag-changed");
+        return saved;
+    }
+
+    /** ตู้ไหนของเปลี่ยน ตู้นั้นต้องได้รายการแท็กชุดใหม่ — ส่งจริงหลัง commit */
+    private void inventoryChanged(Vault vault, String reason) {
+        if (vault == null) return;
+        events.publishEvent(new com.vault.event.VaultInventoryChanged(vault.getVaultId(), reason));
     }
 
     /**
