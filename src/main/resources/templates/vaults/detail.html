@@ -85,7 +85,22 @@
                         <button class="btn btn-ghost btn-sm" @click="showClearLockdown = true">
                             <i class="bi bi-unlock me-1"></i>ปลด lockdown
                         </button>
+                        <!-- sync เองอยู่แล้วทุกครั้งที่ของในตู้เปลี่ยน ปุ่มนี้ไว้ซ่อมตอนตู้พลาดคำสั่งไป -->
+                        <button class="btn btn-ghost btn-sm" th:attr="data-vault=${vault.vaultId}"
+                                x-data="{ syncing: false }" :disabled="syncing"
+                                @click="syncing = true;
+                                        fetch('/vaults/' + $el.dataset.vault + '/sync-inventory', { method: 'POST' })
+                                          .then(r => r.text().then(t => { syncing = false; alert(t); }))">
+                            <span x-show="!syncing"><i class="bi bi-upc-scan me-1"></i>ส่งรายการแท็กให้ตู้</span>
+                            <span x-show="syncing">กำลังส่ง…</span>
+                        </button>
                     </div>
+                    <p class="text-muted small mt-2 mb-0" th:if="${syncableTags != null}">
+                        ตู้นี้ควรรู้จัก <b th:text="${syncableTags}">0</b> แท็ก
+                        <span th:if="${untaggedCopies > 0}" class="text-warning">
+                            · มี <b th:text="${untaggedCopies}">0</b> กล่องที่ยังไม่ได้แปะแท็ก ตู้ชี้กล่องพวกนี้ไม่ได้
+                        </span>
+                    </p>
                 </div>
 
                 <!-- Basic Info -->

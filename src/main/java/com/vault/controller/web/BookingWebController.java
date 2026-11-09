@@ -42,7 +42,8 @@ public class BookingWebController {
 
         // โหลด dropdown data สำหรับ create modal
         model.addAttribute("agents",     agentService.listAgents());
-        model.addAttribute("vaultItems", vaultItemService.listAllActive()); // items ที่อยู่ใน vault แล้ว
+        // ตัวเลือกในฟอร์มจอง — เฉพาะกล่องที่อยู่ในตู้จริง กล่องที่ยังไม่เข้าตู้จองไม่ได้
+        model.addAttribute("vaultItems", vaultItemService.listInVault());
         return "bookings/list";
     }
 

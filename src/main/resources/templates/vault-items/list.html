@@ -9,12 +9,21 @@
     <div th:replace="~{fragments/layout :: sidebar('vault-items')}"></div>
 
     <main class="main-content" x-data="{ showCreate: false, showUnbind: false, unbindId: '', showEditTag: false, editTagId: '', editTagValue: '', editSerialValue: '',
+        showPlace: false, placeId: '', placeSerial: '', placeVaultId: '',
         saveCopy() {
             this.showEditTag = false;
             fetch('/vault-items/' + this.editTagId + '/copy', {
                 method:'PATCH',
                 headers:{'Content-Type':'application/x-www-form-urlencoded'},
                 body:'rfidTag='+encodeURIComponent(this.editTagValue)+'&serialNumber='+encodeURIComponent(this.editSerialValue)
+            }).then(r => r.ok ? window.location = '/vault-items' : r.text().then(t => alert(t)));
+        },
+        savePlacement() {
+            this.showPlace = false;
+            fetch('/vault-items/' + this.placeId + '/vault', {
+                method:'PATCH',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                body:'vaultId='+encodeURIComponent(this.placeVaultId)
             }).then(r => r.ok ? window.location = '/vault-items' : r.text().then(t => alert(t)));
         }
     }">
@@ -30,12 +39,26 @@
             </button>
         </div>
 
+        <!-- กรองตามที่อยู่ของกล่อง — กล่องที่แอปร้านลงทะเบียนเข้ามายังไม่มีตู้ ต้องหาเจอง่าย -->
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <a href="/vault-items" class="btn btn-sm"
+               th:classappend="${currentPlacement == '' ? 'btn-primary' : 'btn-ghost'}">ทั้งหมด</a>
+            <a href="/vault-items?placement=UNASSIGNED" class="btn btn-sm"
+               th:classappend="${currentPlacement == 'UNASSIGNED' ? 'btn-primary' : 'btn-ghost'}">
+                ยังไม่เข้าตู้
+                <span class="badge badge-warning ms-1" th:if="${unassignedCount > 0}" th:text="${unassignedCount}">0</span>
+            </a>
+            <a href="/vault-items?placement=IN_VAULT" class="btn btn-sm"
+               th:classappend="${currentPlacement == 'IN_VAULT' ? 'btn-primary' : 'btn-ghost'}">อยู่ในตู้</a>
+        </div>
+
         <!-- Table -->
         <div class="table-card">
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
                         <th>Vault</th>
+                        <th>Owner</th>
                         <th>Item</th>
                         <th>Serial Number</th>
                         <th>RFID Tag</th>
@@ -47,8 +70,19 @@
                 <tbody>
                     <tr th:each="vi : ${vaultItems}">
                         <td>
-                            <div th:text="${vi.vaultName}">—</div>
-                            <small class="text-muted" th:text="${vi.vaultId}">—</small>
+                            <th:block th:if="${vi.inVault()}">
+                                <div th:text="${vi.vaultName}">—</div>
+                                <small class="text-muted" th:text="${vi.vaultId}">—</small>
+                            </th:block>
+                            <!-- ลงทะเบียนไว้แล้วแต่ยังไม่เข้าตู้ — กล่องนี้จองไม่ได้จนกว่าจะมีตู้ -->
+                            <th:block th:unless="${vi.inVault()}">
+                                <span class="badge badge-warning">ยังไม่เข้าตู้</span>
+                                <div><small class="text-muted">จองไม่ได้จนกว่าจะระบุตู้</small></div>
+                            </th:block>
+                        </td>
+                        <td>
+                            <code th:if="${vi.ownerAgentId != null}" th:text="${vi.ownerAgentId}" class="small">—</code>
+                            <span th:unless="${vi.ownerAgentId != null}" class="text-muted small fst-italic">—</span>
                         </td>
                         <td>
                             <div th:text="${vi.itemNameEn}">—</div>
@@ -67,7 +101,13 @@
                             <span class="badge badge-secondary" th:unless="${vi.status == 'ACTIVE'}" th:text="${vi.status}">—</span>
                         </td>
                         <td th:text="${vi.createdAt != null ? #temporals.format(vi.createdAt, 'dd MMM yyyy') : '—'}">—</td>
-                        <td @click.stop style="width:110px; white-space:nowrap">
+                        <td @click.stop style="width:150px; white-space:nowrap">
+                            <button class="btn btn-ghost btn-sm"
+                                    th:attr="data-id=${vi.id},data-serial=${vi.serialNumber != null ? vi.serialNumber : ''},data-vault=${vi.vaultId != null ? vi.vaultId : ''}"
+                                    @click="placeId = $el.dataset.id; placeSerial = $el.dataset.serial; placeVaultId = $el.dataset.vault; showPlace = true"
+                                    th:title="${vi.inVault()} ? 'ย้ายตู้' : 'ระบุตู้'">
+                                <i class="bi bi-box-seam" th:classappend="${vi.inVault()} ? '' : ' text-warning'"></i>
+                            </button>
                             <button class="btn btn-ghost btn-sm"
                                     th:attr="data-id=${vi.id},data-tag=${vi.rfidTag != null ? vi.rfidTag : ''},data-serial=${vi.serialNumber != null ? vi.serialNumber : ''}"
                                     @click="editTagId = $el.dataset.id; editTagValue = $el.dataset.tag; editSerialValue = $el.dataset.serial; showEditTag = true"
@@ -83,7 +123,8 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(vaultItems)}">
-                        <td colspan="7" class="text-center text-muted py-4">No items assigned yet</td>
+                        <td colspan="8" class="text-center text-muted py-4"
+                            th:text="${currentPlacement == 'UNASSIGNED'} ? 'กล่องทุกใบเข้าตู้แล้ว' : 'No items assigned yet'">No items assigned yet</td>
                     </tr>
                 </tbody>
             </table>
@@ -170,6 +211,37 @@
                 <div class="modal-footer">
                     <button class="btn btn-ghost" @click="showEditTag = false">Cancel</button>
                     <button class="btn btn-primary" @click="saveCopy()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Placement Modal — ระบุตู้ให้กล่องที่แอปลงทะเบียนเข้ามา หรือย้ายข้ามตู้ -->
+        <div class="modal-overlay" x-show="showPlace" x-cloak @click.self="showPlace = false">
+            <div class="modal-content" style="max-width:420px">
+                <div class="modal-header">
+                    <h5 class="modal-title">ระบุตู้ให้กล่องนี้</h5>
+                    <button class="btn-close" @click="showPlace = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        กล่อง <code x-text="placeSerial || '(ไม่มี serial)'"></code>
+                    </p>
+                    <div class="mb-1">
+                        <label class="form-label">Vault</label>
+                        <select class="form-select" x-model="placeVaultId">
+                            <option value="">ยังไม่เข้าตู้</option>
+                            <option th:each="v : ${vaults}"
+                                    th:value="${v.vaultId}"
+                                    th:text="${v.vaultName} + ' (' + ${v.vaultId} + ')'">—</option>
+                        </select>
+                        <div class="form-text">
+                            ถ้าร้านเจ้าของยังไม่ได้ผูกกับตู้ที่เลือก การสร้าง booking จะถูกปฏิเสธภายหลัง
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @click="showPlace = false">Cancel</button>
+                    <button class="btn btn-primary" @click="savePlacement()">Save</button>
                 </div>
             </div>
         </div>

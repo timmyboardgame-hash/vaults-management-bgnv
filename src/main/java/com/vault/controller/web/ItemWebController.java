@@ -29,7 +29,9 @@ public class ItemWebController {
                        @RequestParam(required = false) String search,
                        @RequestParam(required = false) String binding,
                        @RequestHeader(value = "HX-Request", required = false) String htmx) {
-        var boundItemIds = vaultItemService.listAllActive().stream()
+        // "bound" ที่ตัวกรองนี้หมายถึง = มีกล่องอยู่ในตู้แล้ว
+        // กล่องที่ร้านลงทะเบียนไว้แต่ยังไม่เข้าตู้ไม่นับ ไม่งั้น UNBOUND จะหายไปทั้งที่ของยังไม่ถึงตู้
+        var boundItemIds = vaultItemService.listInVault().stream()
                 .map(vi -> vi.itemId())
                 .collect(java.util.stream.Collectors.toSet());
 

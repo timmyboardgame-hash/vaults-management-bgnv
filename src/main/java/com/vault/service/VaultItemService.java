@@ -25,10 +25,15 @@ public class VaultItemService {
     private final ItemRepository itemRepository;
     private final com.vault.repository.BookingRepository bookingRepository;
 
+    /** แจ้งว่าของในตู้เปลี่ยน — ตัว sync รอ commit แล้วส่งรายการแท็กไปให้ตู้ */
+    private final org.springframework.context.ApplicationEventPublisher events;
+
     public VaultItemService(VaultItemRepository vaultItemRepository,
                             VaultRepository vaultRepository,
                             ItemRepository itemRepository,
-                            com.vault.repository.BookingRepository bookingRepository) {
+                            com.vault.repository.BookingRepository bookingRepository,
+                            org.springframework.context.ApplicationEventPublisher events) {
+        this.events = events;
         this.vaultItemRepository = vaultItemRepository;
         this.vaultRepository = vaultRepository;
         this.itemRepository = itemRepository;
@@ -37,12 +42,25 @@ public class VaultItemService {
 
     public List<VaultItemResponse> listByVault(String vaultId) {
         return vaultItemRepository.findByVaultId(vaultId)
-                .stream().map(this::toResponse).toList();
+                .stream().map(VaultItemService::toResponse).toList();
     }
 
+    /** กล่องทั้งหมด รวมที่ยังไม่ได้เข้าตู้ — หน้าจัดการกล่องต้องเห็นครบ */
     public List<VaultItemResponse> listAllActive() {
         return vaultItemRepository.findAllActive()
-                .stream().map(this::toResponse).toList();
+                .stream().map(VaultItemService::toResponse).toList();
+    }
+
+    /** เฉพาะกล่องที่อยู่ในตู้ — ใช้ตรงที่ความหมายคือ "ของที่จองได้" */
+    public List<VaultItemResponse> listInVault() {
+        return vaultItemRepository.findAllActiveInVault()
+                .stream().map(VaultItemService::toResponse).toList();
+    }
+
+    /** กล่องที่ลงทะเบียนแล้วแต่ยังไม่ได้เข้าตู้ */
+    public List<VaultItemResponse> listUnassigned() {
+        return vaultItemRepository.findUnassigned()
+                .stream().map(VaultItemService::toResponse).toList();
     }
 
     @Transactional
@@ -63,14 +81,54 @@ public class VaultItemService {
             throw new IllegalArgumentException("Serial already exists: " + serialNumber);
         }
 
+        String tag = rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null;
+        requireTagFree(tag, null);
+
         VaultItem vaultItem = new VaultItem();
         vaultItem.setVault(vault);
         vaultItem.setItem(item);
         vaultItem.setSerialNumber(serialNumber.trim());
-        vaultItem.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
+        vaultItem.setRfidTag(tag);
         vaultItem.setStatus("ACTIVE");
 
-        return toResponse(vaultItemRepository.save(vaultItem));
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vaultItem));
+        inventoryChanged(vault, "copy-bound");
+        return saved;
+    }
+
+    /**
+     * ระบุตู้ให้กล่องที่แอปลงทะเบียนเข้ามาแต่ยังไม่มีที่อยู่ (หรือย้ายข้ามตู้)
+     *
+     * ไม่เช็ค binding ร้าน-ตู้ที่ชั้นนี้ — หน้าหลังบ้านเป็นที่ที่คนมาแก้ของที่ผิด
+     * ถ้าร้านยังไม่ผูกกับตู้ที่เลือก ตอนสร้าง booking จะฟ้องเองว่า agent ไม่ได้ผูกกับตู้
+     */
+    @Transactional
+    public VaultItemResponse assignVault(String vaultItemId, String vaultId) {
+        VaultItem vi = vaultItemRepository.findById(vaultItemId)
+                .orElseThrow(() -> new IllegalArgumentException("VaultItem not found: " + vaultItemId));
+        Vault vaultBefore = vi.getVault();
+
+        if (vaultId == null || vaultId.isBlank()) {
+            // ถอดออกจากตู้แต่ยังไม่ลบกล่อง — กล่องกลับไปอยู่สถานะรอเข้าตู้
+            vi.setVault(null);
+            vi.setSlotId(null);
+        } else {
+            Vault vault = vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId)
+                    .orElseThrow(() -> new IllegalArgumentException("Vault not found: " + vaultId));
+            vi.setVault(vault);
+        }
+
+        log.info("[VAULT_ITEM] Placement vaultItem={} vault={}", vaultItemId,
+                vaultId != null && !vaultId.isBlank() ? vaultId : "UNASSIGNED");
+
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vi));
+        // ย้ายตู้ต้อง sync ทั้งสองฝั่ง — ตู้เดิมต้องรู้ว่าของไม่อยู่แล้ว
+        inventoryChanged(vaultBefore, "copy-moved");
+        Vault vaultAfter = vi.getVault();
+        if (vaultAfter != null && (vaultBefore == null || !vaultAfter.getVaultId().equals(vaultBefore.getVaultId()))) {
+            inventoryChanged(vaultAfter, "copy-moved");
+        }
+        return saved;
     }
 
     @Transactional
@@ -81,6 +139,8 @@ public class VaultItemService {
         vi.setStatus("INACTIVE");
         vi.setDeletedAt(LocalDateTime.now());
         vaultItemRepository.save(vi);
+        // ถอดกล่องออกแล้ว ตู้ต้องเลิกรู้จักแท็กนี้
+        inventoryChanged(vi.getVault(), "copy-unbound");
     }
 
     @Transactional
@@ -104,15 +164,45 @@ public class VaultItemService {
             vi.setSerialNumber(newSerial);
         }
 
-        vi.setRfidTag(rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null);
-        return toResponse(vaultItemRepository.save(vi));
+        String newTag = rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null;
+        requireTagFree(newTag, vi.getId());
+        vi.setRfidTag(newTag);
+
+        VaultItemResponse saved = toResponse(vaultItemRepository.save(vi));
+        // เปลี่ยนแท็กแล้วไม่บอกตู้ = ตู้ยังจำแท็กเดิม ของใบนี้จะกลายเป็นแท็กแปลกปลอม
+        inventoryChanged(vi.getVault(), "tag-changed");
+        return saved;
     }
 
-    private VaultItemResponse toResponse(VaultItem vi) {
+    /** ตู้ไหนของเปลี่ยน ตู้นั้นต้องได้รายการแท็กชุดใหม่ — ส่งจริงหลัง commit */
+    private void inventoryChanged(Vault vault, String reason) {
+        if (vault == null) return;
+        events.publishEvent(new com.vault.event.VaultInventoryChanged(vault.getVaultId(), reason));
+    }
+
+    /**
+     * แท็กเดียวต้องชี้กล่องเดียว — ถ้าซ้ำ ตอนลูกค้าแตะแท็กที่ตู้ ระบบจะแยกกล่องไม่ออก
+     * ก่อนหน้านี้ไม่มีอะไรกันเลย แท็กม้วนเดียวกันบางล็อตมาพร้อมเลขซ้ำ
+     */
+    private void requireTagFree(String rfidTag, String excludeCopyId) {
+        if (rfidTag == null) return;
+        if (vaultItemRepository.existsByRfidTag(rfidTag, excludeCopyId == null ? "" : excludeCopyId)) {
+            String clash = vaultItemRepository.findByRfidTag(rfidTag)
+                    .map(VaultItem::getSerialNumber).orElse("กล่องอื่น");
+            throw new IllegalArgumentException("RFID tag already used by copy " + clash + ": " + rfidTag);
+        }
+    }
+
+    /**
+     * กล่องที่ยังไม่มีตู้ต้องแปลงได้ ไม่ใช่ NPE — vaultId/vaultName คืน null
+     * ให้หน้าเว็บกับ API ตัดสินใจเองว่าจะแสดงอย่างไร
+     */
+    static VaultItemResponse toResponse(VaultItem vi) {
+        Vault vault = vi.getVault();
         return new VaultItemResponse(
                 vi.getId(),
-                vi.getVault().getVaultId(),
-                vi.getVault().getVaultName(),
+                vault != null ? vault.getVaultId() : null,
+                vault != null ? vault.getVaultName() : null,
                 vi.getItem().getItemId(),
                 vi.getItem().getItemNameEn(),
                 vi.getItem().getItemNameTh(),
@@ -120,7 +210,9 @@ public class VaultItemService {
                 vi.getRfidTag(),
                 vi.getItem().getDefaultPin(),
                 vi.getStatus(),
-                vi.getCreatedAt()
+                vi.getCreatedAt(),
+                vi.ownerAgentId(),
+                vault != null ? VaultItemResponse.IN_VAULT : VaultItemResponse.UNASSIGNED
         );
     }
 }

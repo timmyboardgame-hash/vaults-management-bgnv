@@ -29,13 +29,37 @@ public class VaultItemWebController {
     }
 
     @GetMapping
-    public String list(Model model) {
-        var activeVaultItems = vaultItemService.listAllActive();
-        model.addAttribute("vaultItems", activeVaultItems);
+    public String list(Model model, @RequestParam(required = false) String placement) {
+        var all = vaultItemService.listAllActive();
+
+        // กล่องที่แอปร้านลงทะเบียนเข้ามาแต่ยังไม่ได้เอาเข้าตู้ — ต้องมีที่ให้คนหลังบ้านตามเก็บ
+        long unassignedCount = all.stream().filter(vi -> !vi.inVault()).count();
+        var shown = switch (placement == null ? "" : placement) {
+            case "UNASSIGNED" -> all.stream().filter(vi -> !vi.inVault()).toList();
+            case "IN_VAULT"   -> all.stream().filter(vi ->  vi.inVault()).toList();
+            default           -> all;
+        };
+
+        model.addAttribute("vaultItems", shown);
+        model.addAttribute("unassignedCount", unassignedCount);
+        model.addAttribute("currentPlacement", placement != null ? placement : "");
         model.addAttribute("vaults", vaultService.listVaults());
         // item เดียวกัน bind ได้หลายกล่อง (ต่าง serial) — แสดงทุก item เสมอ
         model.addAttribute("items", itemService.listItems());
         return "vault-items/list";
+    }
+
+    // ระบุตู้ให้กล่องที่ยังไม่มีที่อยู่ หรือย้ายข้ามตู้ · vaultId ว่าง = ถอดออกจากตู้
+    @PatchMapping("/{vaultItemId}/vault")
+    @ResponseBody
+    public ResponseEntity<String> assignVault(@PathVariable String vaultItemId,
+                                              @RequestParam(required = false) String vaultId) {
+        try {
+            vaultItemService.assignVault(vaultItemId, vaultId);
+            return ResponseEntity.ok().header("HX-Redirect", "/vault-items").build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @PostMapping
