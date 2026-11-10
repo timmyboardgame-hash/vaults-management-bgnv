@@ -47,6 +47,7 @@ public class BookingService {
     private final VaultItemRepository  vaultItemRepository;
     private final BindingRepository    bindingRepository;
     private final AwsIotService        awsIotService;
+    private final BookingIdGenerator   bookingIdGenerator;
 
     // itemId พิเศษสำหรับ session booking — จองช่วงเวลา หยิบ/เปลี่ยนเกมไหนก็ได้จนหมดเวลา
     // booking ที่ชี้ item เหล่านี้จะไม่จบเมื่อคืนของ — จบเมื่อหมดเวลา (SessionBookingScheduler) หรือ cancel
@@ -58,6 +59,7 @@ public class BookingService {
                           VaultItemRepository vaultItemRepository,
                           BindingRepository   bindingRepository,
                           AwsIotService       awsIotService,
+                          BookingIdGenerator  bookingIdGenerator,
                           @org.springframework.beans.factory.annotation.Value("${session.item-ids:}") List<String> sessionItemIds) {
         this.bookingRepository   = bookingRepository;
         this.bookingStatusEventRepository = bookingStatusEventRepository;
@@ -65,6 +67,7 @@ public class BookingService {
         this.vaultItemRepository = vaultItemRepository;
         this.bindingRepository   = bindingRepository;
         this.awsIotService       = awsIotService;
+        this.bookingIdGenerator  = bookingIdGenerator;
         this.sessionItemIds      = sessionItemIds;
     }
 
@@ -112,9 +115,17 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(String agentId, CreateBookingRequest req) {
-        log.info("[BOOKING] Creating booking={} agent={}", req.bookingId(), agentId);
-        if (bookingRepository.existsByBookingIdAndDeletedAtIsNull(req.bookingId())) {
-            throw new IllegalArgumentException("Booking ID already exists: " + req.bookingId());
+        // ไม่ส่งเลขมา ระบบออกให้เป็น BK + yyyyMMddHHmmssSSS
+        // ส่งมาเอง ใช้ของที่ส่งมา — เป็น external ID ของฝั่งที่เรียก ห้ามเปลี่ยนใต้มือเขา
+        String bookingId = req.bookingId() != null && !req.bookingId().isBlank()
+                ? req.bookingId().trim()
+                : bookingIdGenerator.next();
+
+        log.info("[BOOKING] Creating booking={} agent={} (id {})", bookingId, agentId,
+                req.bookingId() != null && !req.bookingId().isBlank() ? "from caller" : "generated");
+
+        if (bookingRepository.existsByBookingIdAndDeletedAtIsNull(bookingId)) {
+            throw new IllegalArgumentException("Booking ID already exists: " + bookingId);
         }
 
         Agent agent = agentRepository.findByAgentIdAndDeletedAtIsNull(agentId)
@@ -130,7 +141,7 @@ public class BookingService {
         Item item = vaultItem.getItem();
         if (!item.getItemId().equals(req.itemId())) {
             log.warn("[BOOKING] itemId mismatch booking={} requested={} actual={} serial={} — using copy's item",
-                req.bookingId(), req.itemId(), item.getItemId(), serial);
+                bookingId, req.itemId(), item.getItemId(), serial);
         }
 
         // กัน double-booking กล่องเดียวกัน
@@ -165,7 +176,7 @@ public class BookingService {
         // Device ตอบกลับผ่าน events/booking/created → Lambda → PATCH /api/v1/bookings/{id}/iot-event
         awsIotService.publishBookingCreate(
             thingName,
-            req.bookingId(),
+            bookingId,
             requestId,
             pin,
             vaultItem.getRfidTag(),
@@ -178,7 +189,7 @@ public class BookingService {
         );
 
         Booking booking = new Booking();
-        booking.setBookingId(req.bookingId());
+        booking.setBookingId(bookingId);
         booking.setAgent(agent);
         booking.setItem(item);
         booking.setVault(vaultItem.getVault());

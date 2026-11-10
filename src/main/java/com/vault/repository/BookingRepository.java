@@ -16,6 +16,12 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
 
     boolean existsByBookingIdAndDeletedAtIsNull(String bookingId);
 
+    /**
+     * รวมใบที่ถูก soft delete แล้วด้วย — ใช้ตอนออกเลขใหม่ให้เอง
+     * ใบที่ยกเลิกยังอยู่ในตาราง ออกเลขซ้ำจะทำให้ตามประวัติไม่ได้ว่าใบไหนคือใบไหน
+     */
+    boolean existsByBookingId(String bookingId);
+
     @Query("SELECT b FROM Booking b WHERE b.agent.agentId = :agentId AND b.deletedAt IS NULL ORDER BY b.createdAt DESC")
     List<Booking> findByAgentBusinessId(@Param("agentId") String agentId);
 

@@ -6,7 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
 
 public record CreateBookingRequest(
-    @NotBlank String bookingId,
+    // optional — ไม่ส่งมา ระบบออกเลขให้เป็น BK + yyyyMMddHHmmssSSS (ดู BookingIdGenerator)
+    // ของที่ส่งมาเองยังใช้ได้เหมือนเดิม เพราะเป็น external ID ของฝั่งที่เรียก
+    String bookingId,
     @NotBlank String itemId,
     @NotNull  OffsetDateTime bookingTimeStart,
     @NotNull  OffsetDateTime bookingTimeEnd,
