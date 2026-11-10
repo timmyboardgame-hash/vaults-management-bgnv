@@ -58,7 +58,8 @@ public class BookingWebController {
     @PostMapping
     @ResponseBody
     public ResponseEntity<String> create(
-            @RequestParam String bookingId,
+            // ไม่ใส่มาก็ได้ — service ออกเลขให้เป็น BK + yyyyMMddHHmmssSSS
+            @RequestParam(required = false) String bookingId,
             @RequestParam String bookingName,
             @RequestParam String bookingTimeStart,
             @RequestParam String bookingTimeEnd,

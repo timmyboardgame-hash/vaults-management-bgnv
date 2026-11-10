@@ -15,7 +15,9 @@
         openCreate() {
             const now = new Date();
             const end = new Date(now.getTime() + 60 * 60 * 1000);
-            this.newBookingId   = 'BK-' + Date.now().toString().slice(-6);
+            // ปล่อยว่างไว้ให้ฝั่ง server ออกเลขให้ (BK + yyyyMMddHHmmssSSS)
+            // เลขที่ออกจาก browser เชื่อไม่ได้ — นาฬิกาเครื่องคนใช้เพี้ยนได้ และไม่รู้ว่าเลขไหนถูกใช้ไปแล้ว
+            this.newBookingId   = '';
             const p = n => String(n).padStart(2, '0');
             this.newBookingName = 'Booking ' + now.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' }) + ' ' + p(now.getHours()) + ':' + p(now.getMinutes());
             this.newPin         = this.generatePin();
@@ -164,9 +166,12 @@
 
                         <div class="row g-3">
                             <div class="col-12 col-sm-6">
-                                <label class="form-label">Booking ID</label>
-                                <input type="text" name="bookingId" class="form-control"
-                                       x-model="newBookingId" required>
+                                <label class="form-label">Booking ID
+                                    <span class="text-muted small">(ไม่ใส่ก็ได้)</span></label>
+                                <input type="text" name="bookingId" class="form-control font-monospace"
+                                       placeholder="ปล่อยว่างให้ระบบออกเลขให้"
+                                       x-model="newBookingId">
+                                <div class="form-text">เว้นว่างจะได้เลขแบบ BK20261105143621146 (BK + วันเวลาถึงมิลลิวินาที)</div>
                             </div>
                             <div class="col-12 col-sm-6">
                                 <label class="form-label">Booking Name</label>
