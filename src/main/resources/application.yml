@@ -3,7 +3,16 @@ spring:
     name: vault-management
 
   datasource:
-    url: ${DATABASE_URL:jdbc:sqlite:./data/vaultdb.db}
+    # transaction_mode=IMMEDIATE — ขอ write lock ตั้งแต่ BEGIN ไม่ใช่ตอนจะ insert
+    #
+    # service เรา "อ่านก่อนเขียน" ใน transaction เดียว (createItem เช็ค exists ก่อน insert)
+    # transaction แบบ DEFERRED จะถือ SHARED จากการอ่าน แล้วค่อยขอเลื่อนเป็น RESERVED
+    # ถ้าตอนนั้นมีคนถือ write lock อยู่ SQLite คืน SQLITE_BUSY ทันทีโดยไม่รอ
+    # เพราะรอไปก็ deadlock — busy_timeout ไม่ช่วยกรณีนี้ (ยิง 8 พร้อมกันสำเร็จ 1 ที่เหลือ 500)
+    # IMMEDIATE จับ write lock ก่อน จึงไม่มีสภาพ deadlock คนมาทีหลังได้รอคิว
+    # รายละเอียด + ตัวเลข before/after อยู่ใน SqliteConcurrentWriteTest
+    # ย้ายไป Postgres แล้วถอดออกได้เลย (DATABASE_URL override ทับทั้งก้อน)
+    url: ${DATABASE_URL:jdbc:sqlite:./data/vaultdb.db?transaction_mode=IMMEDIATE&busy_timeout=5000}
     driver-class-name: ${DB_DRIVER:org.sqlite.JDBC}
     username: ${DATABASE_USERNAME:}
     password: ${DATABASE_PASSWORD:}
