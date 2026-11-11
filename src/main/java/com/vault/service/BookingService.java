@@ -162,6 +162,13 @@ public class BookingService {
             .orElseThrow(() -> new IllegalArgumentException(
                 "Agent " + agentId + " is not bound to vault " + vaultId));
 
+        boolean session = sessionItemIds.contains(item.getItemId());
+        if (session) {
+            warnIfCopiesAreOutOnOwnBookings(bookingId, vaultId);
+        } else {
+            requireCopyNotOutOnSession(vaultItem, vaultId);
+        }
+
         // PIN priority: request → item defaultPin → random
         String pin = req.pin() != null && !req.pin().isBlank()
                 ? req.pin()
@@ -186,7 +193,7 @@ public class BookingService {
             serial,
             timeStart,
             timeEnd,
-            sessionItemIds.contains(item.getItemId())  // session → tags:[] + booking_mode=session
+            session  // session → tags:[] + booking_mode=session
         );
 
         Booking booking = new Booking();
@@ -332,8 +339,7 @@ public class BookingService {
 
             // OVERDUE (หมดเวลาแล้วของค้าง) + คืนชิ้นสุดท้าย → ปิดทันที ไม่ต้องรอ scheduler
             if ("RETURNED".equals(action) && "OVERDUE".equals(booking.getBookingStatus())) {
-                java.util.Set<String> outstanding = outstandingEpcs(
-                    bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(booking.getId()));
+                java.util.Set<String> outstanding = outstandingEpcsOf(booking);
                 if (outstanding.isEmpty()) {
                     booking.setBookingStatus("RETURNED");
                     recordStatusEvent(bookingRepository.save(booking), "RETURNED",
@@ -394,9 +400,7 @@ public class BookingService {
         for (Booking b : open) {
             if (!isSessionBooking(b)) continue;  // booking ปกติเลยเวลา = late return flow เดิม ไม่ยุ่ง
 
-            List<BookingStatusEvent> events =
-                bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(b.getId());
-            java.util.Set<String> outstanding = outstandingEpcs(events);
+            java.util.Set<String> outstanding = outstandingEpcsOf(b);
 
             if (outstanding.isEmpty()) {
                 b.setBookingStatus("RETURNED");
@@ -413,6 +417,52 @@ public class BookingService {
             }
         }
         return closed;
+    }
+
+    /**
+     * กล่องที่ถูกหยิบออกไปในรอบ session ยังอยู่ข้างนอก — จองเป็นใบของตัวเองไม่ได้
+     *
+     * การหยิบระหว่าง session ถูกบันทึกเป็น MOVE:PICKED_UP บนใบของ session pass
+     * ไม่ใช่บน serial ของกล่อง ตัวกันจองซ้อนปกติ (existsActiveByItemAndSerial) จึงมองไม่เห็น
+     * ถ้าไม่กันตรงนี้ ระบบจะออก PIN ให้ลูกค้าอีกคนสำหรับกล่องที่ไม่ได้อยู่ในตู้แล้ว
+     */
+    private void requireCopyNotOutOnSession(VaultItem copy, String vaultId) {
+        String epc = VaultItem.normaliseTag(copy.getRfidTag());
+        // ไม่มีแท็ก = ตู้ตามการหยิบของกล่องนี้ไม่ได้อยู่แล้ว ไม่มีข้อมูลให้ตรวจ
+        if (epc == null || sessionItemIds.isEmpty()) return;
+
+        for (Booking openSession : bookingRepository.findOpenByVaultAndItemIds(vaultId, sessionItemIds)) {
+            if (outstandingEpcsOf(openSession).contains(epc)) {
+                throw new IllegalArgumentException(
+                    "Copy is currently out on session " + openSession.getBookingId()
+                        + ": serial=" + copy.getSerialNumber());
+            }
+        }
+    }
+
+    /**
+     * เปิด session ทั้งที่มีกล่องถูกยืมแบบปกติค้างอยู่ — ไม่บล็อค แต่บันทึกไว้
+     *
+     * ตู้ยังมีกล่องอื่นให้หยิบ การบล็อคจะทำให้ขายรอบไม่ได้เพราะกล่องเดียวค้างอยู่
+     * แต่ระหว่างรอบนี้จะมีแท็กที่ผูกกับสองใบ ถ้าภายหลังสงสัยว่าการคืนไปลงผิดใบ ให้ย้อนดู log บรรทัดนี้
+     */
+    private void warnIfCopiesAreOutOnOwnBookings(String bookingId, String vaultId) {
+        if (sessionItemIds.isEmpty()) return;
+        List<String> out = bookingRepository.findOpenByVaultExcludingItemIds(vaultId, sessionItemIds)
+            .stream()
+            .map(Booking::getSerialNumber)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (!out.isEmpty()) {
+            log.warn("[BOOKING] Session booking={} vault={} starting while copies are still out: {}",
+                bookingId, vaultId, String.join(", ", out));
+        }
+    }
+
+    /** epc ของกล่องที่ยังไม่ถูกคืนในใบนี้ */
+    private java.util.Set<String> outstandingEpcsOf(Booking booking) {
+        return outstandingEpcs(
+            bookingStatusEventRepository.findByBookingIdOrderByOccurredAtAsc(booking.getId()));
     }
 
     /** หา epc ของกล่องที่หยิบไปแล้วยังไม่คืน จาก movement events ใน timeline */

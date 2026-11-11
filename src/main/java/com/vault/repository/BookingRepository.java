@@ -47,6 +47,25 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
+    /**
+     * booking ที่ยังไม่จบของตู้หนึ่ง เฉพาะที่ item เป็นตัวที่ส่งมา — ใช้หา session ที่ยังเปิดอยู่
+     *
+     * OVERDUE ยังนับว่าไม่จบ (หมดเวลาแล้วแต่ของยังค้าง) จึงต้องไม่อยู่ในลิสต์ที่กรองทิ้ง
+     * :itemIds ว่างห้ามเรียก — JPA จะ gen `in ()` ซึ่ง SQLite ไม่รับ
+     */
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.vault.vaultId = :vaultId " +
+           "AND b.item.itemId IN :itemIds " +
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+    List<Booking> findOpenByVaultAndItemIds(@Param("vaultId") String vaultId,
+                                            @Param("itemIds") java.util.Collection<String> itemIds);
+
+    /** booking ที่ยังไม่จบของตู้หนึ่ง ยกเว้น item ที่ส่งมา — ใช้หาว่ามีกล่องไหนถูกยืมแบบปกติค้างอยู่ */
+    @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.vault.vaultId = :vaultId " +
+           "AND b.item.itemId NOT IN :itemIds " +
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+    List<Booking> findOpenByVaultExcludingItemIds(@Param("vaultId") String vaultId,
+                                                  @Param("itemIds") java.util.Collection<String> itemIds);
+
     // Vault Board — booking ทุกใบของตู้: ที่ยังไม่จบ + ที่จบแล้วตั้งแต่ :since
     // ไม่กรอง deletedAt เพราะ game booking ที่ CANCELLED ถูก soft-delete แต่ยังต้องแสดงในประวัติ
     @Query("SELECT b FROM Booking b JOIN FETCH b.item JOIN FETCH b.agent WHERE b.vault.vaultId = :vaultId " +
