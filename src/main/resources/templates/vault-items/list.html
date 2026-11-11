@@ -168,9 +168,9 @@
                         <div class="mb-3">
                             <label class="form-label">RFID Tag <span class="text-muted small">(optional)</span></label>
                             <input type="text" name="rfidTag" class="form-control font-monospace"
-                                   placeholder="e.g. 300000000000000000000001"
+                                   placeholder="e.g. 046C773CC82A81"
                                    maxlength="24">
-                            <div class="form-text">EPC format — 24 hex chars ต้องตรงกับ RFID tag จริงบนกล่องบอร์ดเกม</div>
+                            <div class="form-text">UHF EPC 24 hex หรือ NFC 8–16 hex จำนวนคู่ (ปกติ 14) — ต้องตรงกับแท็กจริงบนกล่อง</div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -199,13 +199,13 @@
                         <div class="form-text">เปลี่ยนไม่ได้ถ้ากล่องนี้มี booking ค้างอยู่</div>
                     </div>
                     <div class="mb-1">
-                        <label class="form-label">RFID Tag <span class="text-muted small">(24 hex chars)</span></label>
+                        <label class="form-label">RFID Tag <span class="text-muted small">(UHF 24 / NFC 14 hex)</span></label>
                         <input type="text" class="form-control font-monospace"
                                x-model="editTagValue"
-                               placeholder="e.g. 300000000000000000000001"
+                               placeholder="e.g. 046C773CC82A81"
                                maxlength="24"
                                @keydown.enter="saveCopy()">
-                        <div class="form-text">EPC format — ต้องตรงกับ RFID tag จริงบนกล่องบอร์ดเกม</div>
+                        <div class="form-text">UHF EPC 24 hex หรือ NFC 8–16 hex จำนวนคู่ — ต้องตรงกับแท็กจริงบนกล่อง</div>
                     </div>
                 </div>
                 <div class="modal-footer">

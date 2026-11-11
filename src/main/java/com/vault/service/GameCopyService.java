@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
 /**
  * ลงทะเบียนกล่องเกมจากแอปร้าน
@@ -48,9 +47,6 @@ public class GameCopyService {
 
     private static final Logger log = LoggerFactory.getLogger(GameCopyService.class);
     private static final ZoneId BANGKOK = ZoneId.of("Asia/Bangkok");
-
-    // EPC ของแท็กที่ตู้รองรับ — 24 hex · เจอผิดบ่อยเวลาคนพิมพ์เลขเอง
-    private static final Pattern RFID_TAG = Pattern.compile("^[0-9A-Fa-f]{24}$");
 
     private final VaultItemRepository vaultItemRepository;
     private final VaultRepository vaultRepository;
@@ -117,15 +113,13 @@ public class GameCopyService {
                     "ต้องส่ง serialNumber มาด้วย — serial คือรหัสประจำกล่อง", "serialNumber");
         }
 
-        String rfidTag = trimmed(req.rfidTag());
+        String rfidTag = VaultItem.normaliseTag(req.rfidTag());
         if (rfidTag == null) {
             throw ApiCodeException.badRequest("RFID_TAG_REQUIRED",
                     "ต้องส่ง rfidTag มาด้วย — แท็กถูกแปะบนกล่องตั้งแต่ตอนลงทะเบียน", "rfidTag");
         }
-        if (!RFID_TAG.matcher(rfidTag).matches()) {
-            throw ApiCodeException.badRequest("RFID_TAG_FORMAT",
-                    "rfidTag ต้องเป็นเลขฐานสิบหก 24 ตัว (ที่ส่งมายาว " + rfidTag.length() + " ตัว)", "rfidTag");
-        }
+        // ไม่ตรวจรูปแบบแท็กแล้ว — แท็กมีหลายฟอร์แมต รับเป็น string ตามที่แอปร้านส่งมา
+        // ยังบังคับว่าต้องส่งมา (RFID_TAG_REQUIRED) และต้องไม่ซ้ำกล่องอื่น (RFID_TAG_IN_USE)
 
         // ยิงซ้ำด้วย serial เดิมต้องไม่พัง — แอป retry ได้โดยไม่ต้องจำ request id
         Optional<VaultItem> existing = vaultItemRepository.findBySerial(serial);
@@ -243,12 +237,8 @@ public class GameCopyService {
         VaultItem copy = requireCopy(serialNumber);
         Vault vaultBefore = copy.getVault();
 
-        String newTag = trimmed(req.rfidTag());
+        String newTag = VaultItem.normaliseTag(req.rfidTag());
         if (newTag != null && !newTag.equalsIgnoreCase(copy.getRfidTag())) {
-            if (!RFID_TAG.matcher(newTag).matches()) {
-                throw ApiCodeException.badRequest("RFID_TAG_FORMAT",
-                        "rfidTag ต้องเป็นเลขฐานสิบหก 24 ตัว", "rfidTag");
-            }
             // แท็กเป็นตัวที่ตู้ใช้ชี้กล่อง เปลี่ยนระหว่างลูกค้ายืมอยู่ = ตอนคืนตู้จะชี้ผิดใบ
             requireNoActiveBooking(copy, "เปลี่ยนแท็ก");
             requireTagFree(newTag, copy.getId());

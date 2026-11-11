@@ -121,13 +121,38 @@ class GameCopyServiceTest {
                 .satisfies(e -> assertThat(code(e)).isEqualTo("RFID_TAG_REQUIRED"));
     }
 
-    /** เจอบ่อยเวลาคนพิมพ์เลขแท็กเอง — ต้องแยกจาก "ไม่ส่งมา" ให้แอปบอกผู้ใช้ได้ถูก */
+    /**
+     * แท็กมีหลายฟอร์แมตแล้ว — รับเป็น string ตามที่แอปร้านส่งมา ไม่บังคับ 24 hex
+     *
+     * เดิมสั้นกว่า 24 ตัวหรือมีตัวอักษรนอก hex จะถูกตีกลับเป็น RFID_TAG_FORMAT
+     * ตอนนี้ต้องลงทะเบียนผ่าน (เก็บเป็นตัวพิมพ์ใหญ่ ดู tagIsStoredUppercase)
+     */
     @Test
-    void shortOrNonHexTag_isAFormatError() {
-        assertThatThrownBy(() -> service.register("shop-001", req("SN-1", "E280", null)))
-                .satisfies(e -> assertThat(code(e)).isEqualTo("RFID_TAG_FORMAT"));
-        assertThatThrownBy(() -> service.register("shop-001", req("SN-1", "ZZ805641554C540000DE0001", null)))
-                .satisfies(e -> assertThat(code(e)).isEqualTo("RFID_TAG_FORMAT"));
+    void tagOfAnyFormat_isAccepted() {
+        assertThat(service.register("shop-001", req("SN-1", "E280", null))
+                .copy().rfidTag()).isEqualTo("E280");
+
+        assertThat(service.register("shop-001", req("SN-2", "ZZ805641554C540000DE0001", null))
+                .copy().rfidTag()).isEqualTo("ZZ805641554C540000DE0001");
+
+        assertThat(service.register("shop-001", req("SN-3", "tag-new-format-001", null))
+                .copy().rfidTag()).isEqualTo("TAG-NEW-FORMAT-001");
+    }
+
+    /**
+     * แท็กเก็บเป็นตัวพิมพ์ใหญ่เสมอ — ทุกทางเทียบแบบ exact match
+     *
+     * ที่ส่งเข้าตู้ (inventory/sync กับ tags ใน booking/create) เป็นตัวใหญ่
+     * ถ้าเก็บคนละเคส ตู้จะหาแท็กไม่เจอ ลูกค้าแตะแล้วนับเป็นกล่องผิด
+     * สามครั้งตู้ lockdown · และตัวกันซ้ำจะมองแท็กเดียวกันคนละเคสเป็นสองแท็ก
+     */
+    @Test
+    void tagIsStoredUppercase() {
+        assertThat(service.register("shop-001", req("SN-1", "046c773cc82a81", null))
+                .copy().rfidTag()).isEqualTo("046C773CC82A81");
+
+        assertThat(service.register("shop-001", req("SN-2", "  e2805641554c540000de0001  ", null))
+                .copy().rfidTag()).isEqualTo("E2805641554C540000DE0001");
     }
 
     /** กล่องสองใบถือแท็กเดียวกัน = ตู้แยกไม่ออกว่าใบไหนถูกหยิบ */

@@ -179,7 +179,8 @@ public class BookingService {
             bookingId,
             requestId,
             pin,
-            vaultItem.getRfidTag(),
+            // ข้อมูลเก่าอาจเก็บเป็นตัวพิมพ์เล็ก — inventory/sync ส่งตัวใหญ่ ต้องให้ตรงกัน
+            VaultItem.normaliseTag(vaultItem.getRfidTag()),
             item.getItemId(),
             item.getItemNameEn(),
             serial,
@@ -368,8 +369,10 @@ public class BookingService {
     }
 
     /** แปลง epc → คำอธิบายกล่อง "Catan (SN-001) epc=E280..." สำหรับ movement note */
-    private String describeCopy(String epc) {
-        if (epc == null || epc.isBlank()) return "unknown tag";
+    private String describeCopy(String rawEpc) {
+        // ตู้ส่ง epc มาเคสไหนก็ได้ · ที่เก็บเป็นตัวใหญ่ และ query เทียบแบบ exact match
+        String epc = VaultItem.normaliseTag(rawEpc);
+        if (epc == null) return "unknown tag";
         return vaultItemRepository.findActiveByRfidTag(epc)
             .map(vi -> vi.getItem().getItemNameEn() + " (" + vi.getSerialNumber() + ") epc=" + epc)
             .orElse("unregistered tag epc=" + epc);
