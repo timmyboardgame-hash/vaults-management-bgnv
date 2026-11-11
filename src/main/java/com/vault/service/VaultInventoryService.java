@@ -38,8 +38,29 @@ public class VaultInventoryService {
 
     private static final Logger log = LoggerFactory.getLogger(VaultInventoryService.class);
 
-    /** ตู้รับ EPC 24 hex · แถวเดียวผิด ตู้ปฏิเสธทั้ง batch จึงต้องกรองก่อนส่ง */
-    private static final Pattern EPC = Pattern.compile("^[0-9A-Fa-f]{24}$");
+    /**
+     * ตู้รับแท็กสองแบบ — แถวเดียวผิด ตู้ปฏิเสธทั้ง batch จึงต้องกรองก่อนส่ง
+     *
+     * UHF — EPC 24 hex
+     * NFC — UID 8–16 hex จำนวนคู่ (ปกติ 14) เช่นตู้ screenless ที่อ่าน NFC ไม่ใช่ UHF
+     *
+     * ความยาวไม่ทับกัน (NFC ไม่เกิน 16 · UHF เท่ากับ 24) จึงแยกชนิดจากรูปแบบได้เลย
+     */
+    private static final Pattern UHF_EPC = Pattern.compile("^[0-9A-Fa-f]{24}$");
+    private static final Pattern NFC_UID = Pattern.compile("^(?:[0-9A-Fa-f]{2}){4,8}$");
+
+    /**
+     * ชนิดแท็กตามที่ตู้เข้าใจ — null ถ้าไม่เข้ารูปแบบไหนเลย (ไม่ส่งไปให้ตู้)
+     *
+     * package-private เพื่อให้เทสต์เรียกตรงได้ ไม่ต้องผ่าน MQTT
+     */
+    static String tagTypeOf(String tag) {
+        if (tag == null) return null;
+        String t = tag.trim();
+        if (UHF_EPC.matcher(t).matches()) return "uhf";
+        if (NFC_UID.matcher(t).matches()) return "nfc";
+        return null;
+    }
 
     private final VaultItemRepository vaultItemRepository;
     private final VaultRepository vaultRepository;
@@ -101,9 +122,11 @@ public class VaultInventoryService {
                 noTag++;
                 continue;
             }
-            if (!EPC.matcher(epc.trim()).matches()) {
+            String tagType = tagTypeOf(epc);
+            if (tagType == null) {
                 // ข้อมูลเก่าที่เข้ามาก่อนจะมีการตรวจรูปแบบ — ส่งไปจะทำให้ตู้ตีกลับทั้งชุด
-                log.warn("[INVENTORY] Skipping copy serial={} — tag is not 24 hex: {}", vi.getSerialNumber(), epc);
+                log.warn("[INVENTORY] Skipping copy serial={} — tag is neither UHF 24 hex nor NFC 8–16 hex: {}",
+                        vi.getSerialNumber(), epc);
                 badTag++;
                 continue;
             }
@@ -111,6 +134,10 @@ public class VaultInventoryService {
             Item item = vi.getItem();
             Map<String, String> row = new LinkedHashMap<>();
             row.put("epc", epc.trim().toUpperCase());
+            // UHF ไม่ส่ง tag_type — payload เดิมที่ตู้รับอยู่แล้ว เปลี่ยนไปอาจพังของที่ใช้งานได้
+            if ("nfc".equals(tagType)) {
+                row.put("tag_type", "nfc");
+            }
             row.put("game_id", item.getItemId());
             // ตู้ต้องการ game_title ที่ไม่ว่าง — ของที่ไม่มีชื่ออังกฤษใช้รหัสเกมไปก่อน
             row.put("game_title", item.getItemNameEn() != null && !item.getItemNameEn().isBlank()
@@ -130,7 +157,7 @@ public class VaultInventoryService {
         if (vaultRepository.findByVaultIdAndDeletedAtIsNull(vaultId).isEmpty()) return Optional.empty();
         long n = vaultItemRepository.findByVaultId(vaultId).stream()
                 .filter(vi -> "ACTIVE".equals(vi.getStatus()))
-                .filter(vi -> vi.getRfidTag() != null && EPC.matcher(vi.getRfidTag().trim()).matches())
+                .filter(vi -> tagTypeOf(vi.getRfidTag()) != null)
                 .count();
         return Optional.of((int) n);
     }

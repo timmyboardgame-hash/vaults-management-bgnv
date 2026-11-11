@@ -208,4 +208,119 @@ class VaultInventorySyncTest {
 
         verify(vaults, never()).findByVaultIdAndDeletedAtIsNull(anyString());
     }
+
+    // ───────────────────────── NFC (ตู้ screenless) ─────────────────────────
+
+    /**
+     * ตู้ screenless อ่าน NFC 14 hex ไม่ใช่ UHF 24 — ต้องส่งไปพร้อม tag_type
+     *
+     * เดิมตัวกรองรับแค่ 24 ตัว แท็ก NFC จึงถูกข้ามหมด ตู้ได้ mappings ว่าง
+     * ผลคือตู้ไม่รู้จักกล่องในตู้ จอง Session Pass หยิบกล่องไม่ได้
+     * และถ้าลูกค้าแตะกล่องผิดสามครั้งตู้จะ lockdown
+     */
+    @Test
+    void nfcTag_isSentWithTagType() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("NOVA-EVENT-001", "046C773CC82A81", "GAME-NOVA", "Nova", "ACTIVE")));
+
+        var result = service.syncVault("vt-001");
+
+        assertThat(sentMappings()).containsExactly(Map.of(
+                "epc", "046C773CC82A81",
+                "tag_type", "nfc",
+                "game_id", "GAME-NOVA",
+                "game_title", "Nova"));
+        assertThat(result.sent()).isEqualTo(1);
+        assertThat(result.skippedBadTag()).isZero();
+    }
+
+    /** ลำดับคีย์ตามที่ตกลงกับฝั่งตู้ — epc, tag_type, game_id, game_title */
+    @Test
+    void nfcRow_keepsTheAgreedKeyOrder() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("NOVA-EVENT-001", "046C773CC82A81", "GAME-NOVA", "Nova", "ACTIVE")));
+
+        service.syncVault("vt-001");
+
+        assertThat(sentMappings().get(0).keySet())
+                .containsExactly("epc", "tag_type", "game_id", "game_title");
+    }
+
+    /** UHF ต้องไม่มี tag_type — payload เดิมที่ตู้ใช้งานอยู่ ห้ามเปลี่ยนไปพร้อมกัน */
+    @Test
+    void uhfTag_isStillSentWithoutTagType() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("SN-1", "E2805641554C540000DE0001", "GAME-CATAN", "Catan", "ACTIVE")));
+
+        service.syncVault("vt-001");
+
+        assertThat(sentMappings().get(0)).doesNotContainKey("tag_type");
+    }
+
+    /** ตู้เดียวมีทั้งสองชนิดได้ — ต้องออกไปทั้งคู่ ไม่ใช่เลือกข้าง */
+    @Test
+    void nfcAndUhfInTheSameVault_bothGoOut() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("SN-1", "E2805641554C540000DE0001", "GAME-CATAN", "Catan", "ACTIVE"),
+                copy("NOVA-EVENT-001", "046C773CC82A81", "GAME-NOVA", "Nova", "ACTIVE")));
+
+        var result = service.syncVault("vt-001");
+
+        assertThat(result.sent()).isEqualTo(2);
+        assertThat(result.skippedBadTag()).isZero();
+        assertThat(sentMappings()).extracting(r -> r.get("epc"))
+                .containsExactly("E2805641554C540000DE0001", "046C773CC82A81");
+    }
+
+    /** คนกรอกแท็ก NFC พิมพ์เล็กมาก็ต้องส่งเป็นตัวพิมพ์ใหญ่เหมือน UHF */
+    @Test
+    void lowercaseNfcTag_isNormalisedToUppercase() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("NOVA-EVENT-001", "046c773cc82a81", "GAME-NOVA", "Nova", "ACTIVE")));
+
+        service.syncVault("vt-001");
+
+        assertThat(sentMappings().get(0)).containsEntry("epc", "046C773CC82A81");
+    }
+
+    /**
+     * ตัวเลข "ตู้นี้ควรรู้จัก N แท็ก" ที่หน้า vault ต้องนับ NFC ด้วย
+     *
+     * นี่คือตัวที่ทำให้ขึ้น 0 ทั้งที่ผูกกล่องไว้ครบ — มันใช้ตัวกรองเดียวกับตอนส่ง
+     */
+    @Test
+    void countSyncable_countsNfcAndUhfButNotUntaggedOrMalformed() {
+        vaultExists("vt-001");
+        when(copies.findByVaultId("vt-001")).thenReturn(List.of(
+                copy("SN-1", "E2805641554C540000DE0001", "GAME-CATAN", "Catan", "ACTIVE"),
+                copy("NOVA-EVENT-001", "046C773CC82A81", "GAME-NOVA", "Nova", "ACTIVE"),
+                copy("NOVA-EVENT-002", "046C773CC82A82", "GAME-NOVA", "Nova", "ACTIVE"),
+                copy("SN-NOTAG", null, "GAME-WING", "Wingspan", "ACTIVE"),
+                copy("SN-BAD", "123", "GAME-WING", "Wingspan", "ACTIVE"),
+                copy("SN-OFF", "046C773CC82A83", "GAME-NOVA", "Nova", "INACTIVE")));
+
+        assertThat(service.countSyncable("vt-001")).contains(3);
+    }
+
+    /** ขอบของรูปแบบ — คี่ สั้นเกิน หรือยาวคาบระหว่าง NFC กับ UHF ต้องไม่ผ่าน */
+    @Test
+    void tagTypeOf_classifiesByFormat() {
+        assertThat(VaultInventoryService.tagTypeOf("E2805641554C540000DE0001")).isEqualTo("uhf");
+
+        assertThat(VaultInventoryService.tagTypeOf("046C773C")).isEqualTo("nfc");           // 8
+        assertThat(VaultInventoryService.tagTypeOf("046C773CC82A81")).isEqualTo("nfc");     // 14 ปกติ
+        assertThat(VaultInventoryService.tagTypeOf("046C773CC82A8100")).isEqualTo("nfc");   // 16
+        assertThat(VaultInventoryService.tagTypeOf("  046C773CC82A81  ")).isEqualTo("nfc"); // trim ให้
+
+        assertThat(VaultInventoryService.tagTypeOf("046C773")).isNull();                    // 7 คี่
+        assertThat(VaultInventoryService.tagTypeOf("046C77")).isNull();                     // 6 สั้นเกิน
+        assertThat(VaultInventoryService.tagTypeOf("046C773CC82A8100AB")).isNull();         // 18 ไม่เข้าทั้งคู่
+        assertThat(VaultInventoryService.tagTypeOf("ZZ6C773CC82A81")).isNull();             // ไม่ใช่ hex
+        assertThat(VaultInventoryService.tagTypeOf(null)).isNull();
+    }
 }

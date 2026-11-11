@@ -50,7 +50,7 @@ public class VaultItem {
     private String slotId;  // nullable — ไม่ได้กรอกตอน bind แล้ว
 
     @Column(name = "rfid_tag")
-    private String rfidTag;  // RFID tag ID (24 hex chars) — ส่งใน MQTT cmd/booking/create tags:[rfidTag]
+    private String rfidTag;  // RFID tag ID — รับทุกรูปแบบ · ส่งใน MQTT cmd/booking/create tags:[rfidTag]
 
     // เลข barcode กล่อง — 1 row = 1 กล่องจริง; item เดียวกันมีหลายกล่องได้ (ต่าง serial)
     // serial คือ identity ของกล่อง: unique ทั้งระบบ validate ที่ app layer (soft-delete aware)
