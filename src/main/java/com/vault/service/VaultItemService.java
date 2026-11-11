@@ -81,7 +81,7 @@ public class VaultItemService {
             throw new IllegalArgumentException("Serial already exists: " + serialNumber);
         }
 
-        String tag = rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null;
+        String tag = VaultItem.normaliseTag(rfidTag);
         requireTagFree(tag, null);
 
         VaultItem vaultItem = new VaultItem();
@@ -164,7 +164,7 @@ public class VaultItemService {
             vi.setSerialNumber(newSerial);
         }
 
-        String newTag = rfidTag != null && !rfidTag.isBlank() ? rfidTag.trim() : null;
+        String newTag = VaultItem.normaliseTag(rfidTag);
         requireTagFree(newTag, vi.getId());
         vi.setRfidTag(newTag);
 

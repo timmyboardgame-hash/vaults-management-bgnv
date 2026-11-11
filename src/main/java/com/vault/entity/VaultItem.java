@@ -52,6 +52,20 @@ public class VaultItem {
     @Column(name = "rfid_tag")
     private String rfidTag;  // RFID tag ID — รับทุกรูปแบบ · ส่งใน MQTT cmd/booking/create tags:[rfidTag]
 
+    /**
+     * แท็กเก็บเป็นตัวพิมพ์ใหญ่เสมอ — ทุกทางเทียบแบบ exact match ไม่ใช่ ignore case
+     *
+     * ที่เทียบตรง ๆ มีสี่ทาง: รายการที่ส่งเข้าตู้ (inventory/sync), tags ใน booking/create,
+     * lookup ขาเข้าตอนตู้แจ้ง epc มา (findActiveByRfidTag) และตัวกันแท็กซ้ำ (existsByRfidTag)
+     * ถ้าเก็บคนละเคสกับที่ส่ง ตู้จะหาไม่เจอ → ลูกค้าแตะแล้วนับเป็นกล่องผิด สามครั้งตู้ lockdown
+     * และตัวกันซ้ำจะมองแท็กเดียวกันคนละเคสเป็นสองแท็ก
+     */
+    public static String normaliseTag(String tag) {
+        if (tag == null) return null;
+        String t = tag.trim();
+        return t.isEmpty() ? null : t.toUpperCase();
+    }
+
     // เลข barcode กล่อง — 1 row = 1 กล่องจริง; item เดียวกันมีหลายกล่องได้ (ต่าง serial)
     // serial คือ identity ของกล่อง: unique ทั้งระบบ validate ที่ app layer (soft-delete aware)
     @Column(name = "serial_number")

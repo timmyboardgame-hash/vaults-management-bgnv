@@ -116,8 +116,10 @@ public class BorrowCycleExtractor {
 
     private RawCycle cycle(LocalDateTime pickedUp, LocalDateTime returned,
                            String note, String epc, Booking b, LocalDateTime now) {
-        VaultItem vi = epc == null ? null
-                : vaultItemRepository.findActiveByRfidTag(epc).orElse(null);
+        // แท็กเก็บเป็นตัวพิมพ์ใหญ่ · epc ที่แกะมาจาก note อาจเป็นเคสอื่น
+        String lookupEpc = VaultItem.normaliseTag(epc);
+        VaultItem vi = lookupEpc == null ? null
+                : vaultItemRepository.findActiveByRfidTag(lookupEpc).orElse(null);
         String name   = vi != null ? vi.getItem().getItemNameEn() : itemNameFromNote(note);
         String serial = vi != null ? vi.getSerialNumber() : null;
 

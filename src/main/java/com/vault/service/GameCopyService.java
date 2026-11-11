@@ -113,7 +113,7 @@ public class GameCopyService {
                     "ต้องส่ง serialNumber มาด้วย — serial คือรหัสประจำกล่อง", "serialNumber");
         }
 
-        String rfidTag = trimmed(req.rfidTag());
+        String rfidTag = VaultItem.normaliseTag(req.rfidTag());
         if (rfidTag == null) {
             throw ApiCodeException.badRequest("RFID_TAG_REQUIRED",
                     "ต้องส่ง rfidTag มาด้วย — แท็กถูกแปะบนกล่องตั้งแต่ตอนลงทะเบียน", "rfidTag");
@@ -237,7 +237,7 @@ public class GameCopyService {
         VaultItem copy = requireCopy(serialNumber);
         Vault vaultBefore = copy.getVault();
 
-        String newTag = trimmed(req.rfidTag());
+        String newTag = VaultItem.normaliseTag(req.rfidTag());
         if (newTag != null && !newTag.equalsIgnoreCase(copy.getRfidTag())) {
             // แท็กเป็นตัวที่ตู้ใช้ชี้กล่อง เปลี่ยนระหว่างลูกค้ายืมอยู่ = ตอนคืนตู้จะชี้ผิดใบ
             requireNoActiveBooking(copy, "เปลี่ยนแท็ก");
