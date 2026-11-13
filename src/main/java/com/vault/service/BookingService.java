@@ -385,38 +385,91 @@ public class BookingService {
     }
 
     /**
-     * ปิด session booking ที่เลย bookingTimeEnd — เรียกจาก SessionBookingScheduler
+     * ปิด booking ที่เลย bookingTimeEnd — เรียกจาก SessionBookingScheduler ทุกนาที
      *
-     * ของครบ (ทุกกล่องที่หยิบถูกคืนแล้ว) → ปิดเป็น RETURNED
-     * ของไม่ครบ → status = OVERDUE (ยังไม่จบ — event คืนของยังบันทึกเป็น MOVE ได้
-     *             และยังบล็อค session ใหม่บนตู้เดิม) เมื่อคืนครบจึงปิดเป็น RETURNED
-     *             (ปิดทันทีตอนรับ event คืนชิ้นสุดท้าย หรือรอบ scheduler ถัดไป)
-     * @return จำนวน booking ที่ถูกปิด
+     * เดิมทำเฉพาะ session booking แล้ว `continue` ข้ามใบปกติไป โดยอ้างว่าใบปกติมี
+     * "late return flow เดิม" รับช่วงต่อ — ซึ่งไม่เคยมีอยู่จริง late_return เป็นแค่
+     * ANOMALY event ที่ตู้ส่งมา ไม่เคยเปลี่ยน status ใบปกติที่ไม่มีใครมารับจึงค้างเป็น
+     * CONFIRMED ตลอดกาล และล็อก serial นั้นถาวร (เจอจริง: BK20261105143621146 ค้าง 8 วัน
+     * ทำให้ทีมแอปจองกล่องเดิมไม่ได้ 7 ครั้ง)
+     *
+     * @return จำนวน booking ที่ถูกปิด (OVERDUE ไม่นับ — ยังไม่จบ)
      */
     @Transactional
-    public int closeExpiredSessionBookings() {
+    public int closeExpiredBookings() {
         List<Booking> open = bookingRepository.findOpenPastEnd(LocalDateTime.now());
         int closed = 0;
         for (Booking b : open) {
-            if (!isSessionBooking(b)) continue;  // booking ปกติเลยเวลา = late return flow เดิม ไม่ยุ่ง
-
-            java.util.Set<String> outstanding = outstandingEpcsOf(b);
-
-            if (outstanding.isEmpty()) {
-                b.setBookingStatus("RETURNED");
-                Booking saved = bookingRepository.save(b);
-                recordStatusEvent(saved, "RETURNED", "Session expired — all items returned");
-                log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
-                closed++;
-            } else if (!"OVERDUE".equals(b.getBookingStatus())) {
-                b.setBookingStatus("OVERDUE");
-                Booking saved = bookingRepository.save(b);
-                recordStatusEvent(saved, "OVERDUE",
-                    "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding));
-                log.warn("[SESSION] Overdue booking={} outstanding={}", b.getBookingId(), outstanding);
-            }
+            closed += isSessionBooking(b) ? closeExpiredSession(b) : closeExpiredGameBooking(b);
         }
         return closed;
+    }
+
+    /**
+     * session ที่หมดเวลา
+     *
+     * ของครบ (ทุกกล่องที่หยิบถูกคืนแล้ว) → ปิดเป็น RETURNED
+     * ของไม่ครบ → OVERDUE (ยังไม่จบ — event คืนของยังบันทึกเป็น MOVE ได้
+     *             และยังบล็อค session ใหม่บนตู้เดิม) เมื่อคืนครบจึงปิดเป็น RETURNED
+     *             (ปิดทันทีตอนรับ event คืนชิ้นสุดท้าย หรือรอบ scheduler ถัดไป)
+     */
+    private int closeExpiredSession(Booking b) {
+        java.util.Set<String> outstanding = outstandingEpcsOf(b);
+
+        if (outstanding.isEmpty()) {
+            b.setBookingStatus("RETURNED");
+            Booking saved = bookingRepository.save(b);
+            recordStatusEvent(saved, "RETURNED", "Session expired — all items returned");
+            log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
+            return 1;
+        }
+        if (!"OVERDUE".equals(b.getBookingStatus())) {
+            b.setBookingStatus("OVERDUE");
+            Booking saved = bookingRepository.save(b);
+            recordStatusEvent(saved, "OVERDUE",
+                "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding));
+            log.warn("[SESSION] Overdue booking={} outstanding={}", b.getBookingId(), outstanding);
+        }
+        return 0;
+    }
+
+    /**
+     * booking ปกติที่หมดเวลา — ตัดสินจากว่าของออกจากตู้ไปหรือยัง
+     *
+     * PENDING / CONFIRMED = ไม่มีใครมารับ กล่องยังอยู่ในตู้ → ถอนสิทธิ์ที่ตู้แล้วปิดเป็น EXPIRED
+     *   ต้องสั่งตู้ด้วย ไม่ใช่แค่แก้ DB — ไม่งั้น PIN กับ QR ของใบที่ปิดไปแล้วยังเปิดตู้ได้
+     * ACTIVE = หยิบไปแล้วไม่คืน ของอยู่กับลูกค้าจริง → OVERDUE ปิดไม่ได้ ต้องรอ event คืนของ
+     * OVERDUE = ยกธงไปแล้ว ไม่ต้องเขียนซ้ำทุกนาที
+     */
+    private int closeExpiredGameBooking(Booking b) {
+        String status = b.getBookingStatus();
+
+        if ("OVERDUE".equals(status)) return 0;
+
+        if ("ACTIVE".equals(status)) {
+            b.setBookingStatus("OVERDUE");
+            Booking saved = bookingRepository.save(b);
+            recordStatusEvent(saved, "OVERDUE", "หมดเวลาแล้วยังไม่คืนกล่อง serial=" + b.getSerialNumber());
+            log.warn("[BOOKING] Overdue booking={} serial={} — item still out",
+                b.getBookingId(), b.getSerialNumber());
+            return 0;
+        }
+
+        // PENDING / CONFIRMED
+        if (b.getVault() != null) {
+            awsIotService.publishBookingCancel(
+                b.getVault().effectiveThingName(), b.getBookingId(), UUID.randomUUID().toString());
+        } else {
+            log.warn("[BOOKING] No vault on booking={} — skipping MQTT cancel", b.getBookingId());
+        }
+
+        b.setBookingStatus("EXPIRED");
+        Booking saved = bookingRepository.save(b);
+        recordStatusEvent(saved, "EXPIRED",
+            "หมดเวลาแล้วไม่มีผู้มารับ (" + status + ") — ถอนสิทธิ์ที่ตู้และคืนกล่องเข้าระบบ");
+        log.info("[BOOKING] Expired booking={} serial={} was={} — copy released",
+            b.getBookingId(), b.getSerialNumber(), status);
+        return 1;
     }
 
     /**

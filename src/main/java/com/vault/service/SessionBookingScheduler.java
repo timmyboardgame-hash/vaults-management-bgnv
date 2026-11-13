@@ -6,11 +6,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * ปิด session booking ที่หมดเวลาอัตโนมัติ
+ * ปิด booking ที่หมดเวลาอัตโนมัติ — เช็คทุก 1 นาที
  *
- * Session booking (item พิเศษตาม session.item-ids) ไม่จบเมื่อคืนของ —
- * จบเมื่อเลย bookingTimeEnd เท่านั้น scheduler นี้เช็คทุก 1 นาที
- * booking ปกติไม่โดนแตะ (late return flow เดิม)
+ * Session booking (item พิเศษตาม session.item-ids) ไม่จบเมื่อคืนของ จบเมื่อเลย bookingTimeEnd
+ * booking ปกติที่ไม่มีใครมารับก็ปิดที่นี่เหมือนกัน ไม่งั้นค้างเป็น CONFIRMED แล้วล็อก serial ถาวร
  */
 @Component
 public class SessionBookingScheduler {
@@ -26,12 +25,12 @@ public class SessionBookingScheduler {
     @Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
     public void closeExpiredSessions() {
         try {
-            int closed = bookingService.closeExpiredSessionBookings();
+            int closed = bookingService.closeExpiredBookings();
             if (closed > 0) {
-                log.info("[SESSION] Scheduler closed {} expired session booking(s)", closed);
+                log.info("[BOOKING] Scheduler closed {} expired booking(s)", closed);
             }
         } catch (Exception e) {
-            log.error("[SESSION] Scheduler failed", e);
+            log.error("[BOOKING] Scheduler failed", e);
         }
     }
 }

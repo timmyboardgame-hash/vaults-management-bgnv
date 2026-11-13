@@ -38,13 +38,13 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     List<Booking> findByVaultAndItemBusinessId(@Param("vaultId") String vaultId, @Param("itemId") String itemId);
 
     @Query("SELECT b FROM Booking b WHERE b.vault.vaultId = :vaultId AND b.item.itemId = :itemId " +
-           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL " +
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL " +
            "ORDER BY b.updatedAt DESC")
     List<Booking> findActiveByVaultAndItemBusinessId(@Param("vaultId") String vaultId, @Param("itemId") String itemId);
 
     // กัน double-booking กล่องเดียวกัน (item DB id + serial) — :itemId คือ items.id (UUID) ไม่ใช่ business ID
     @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.item.id = :itemId AND b.serialNumber = :serialNumber " +
-           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL")
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
     /**
@@ -55,27 +55,28 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
      */
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.vault.vaultId = :vaultId " +
            "AND b.item.itemId IN :itemIds " +
-           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL")
     List<Booking> findOpenByVaultAndItemIds(@Param("vaultId") String vaultId,
                                             @Param("itemIds") java.util.Collection<String> itemIds);
 
     /** booking ที่ยังไม่จบของตู้หนึ่ง ยกเว้น item ที่ส่งมา — ใช้หาว่ามีกล่องไหนถูกยืมแบบปกติค้างอยู่ */
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.vault.vaultId = :vaultId " +
            "AND b.item.itemId NOT IN :itemIds " +
-           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') AND b.deletedAt IS NULL")
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL")
     List<Booking> findOpenByVaultExcludingItemIds(@Param("vaultId") String vaultId,
                                                   @Param("itemIds") java.util.Collection<String> itemIds);
 
     // Vault Board — booking ทุกใบของตู้: ที่ยังไม่จบ + ที่จบแล้วตั้งแต่ :since
     // ไม่กรอง deletedAt เพราะ game booking ที่ CANCELLED ถูก soft-delete แต่ยังต้องแสดงในประวัติ
     @Query("SELECT b FROM Booking b JOIN FETCH b.item JOIN FETCH b.agent WHERE b.vault.vaultId = :vaultId " +
-           "AND (b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED') OR b.updatedAt >= :since) " +
+           "AND (b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') OR b.updatedAt >= :since) " +
            "ORDER BY b.updatedAt DESC")
     List<Booking> findBoardBookings(@Param("vaultId") String vaultId,
                                     @Param("since") java.time.LocalDateTime since);
 
-    // booking ที่ยังไม่จบแต่เลยเวลาสิ้นสุดแล้ว — scheduler ใช้ปิด session booking ที่หมดเวลา
+    // booking ที่ยังไม่จบแต่เลยเวลาสิ้นสุดแล้ว — scheduler ใช้ปิดใบที่หมดเวลา (ทั้ง session และใบปกติ)
     // รวม OVERDUE ด้วย: เช็คซ้ำทุกรอบเผื่อของครบแล้ว (กันเคส event คืนชิ้นสุดท้ายประมวลผลพลาด)
+    // ไม่รวม EXPIRED: ปิดแล้วไม่ต้องวนมาสั่งตู้ยกเลิกซ้ำทุกนาที
     @Query("SELECT b FROM Booking b JOIN FETCH b.item WHERE b.bookingTimeEnd < :now " +
            "AND b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE','OVERDUE') AND b.deletedAt IS NULL")
     List<Booking> findOpenPastEnd(@Param("now") java.time.LocalDateTime now);
