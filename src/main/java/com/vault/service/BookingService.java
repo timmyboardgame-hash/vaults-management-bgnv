@@ -128,6 +128,12 @@ public class BookingService {
             throw new IllegalArgumentException("Booking ID already exists: " + bookingId);
         }
 
+        // แปลง OffsetDateTime → LocalDateTime (เก็บเป็น Bangkok time ใน DB)
+        // ต้องได้ก่อนเช็คจองซ้อน เพราะการเช็คดูจากช่วงเวลา
+        LocalDateTime timeStart = req.bookingTimeStart().atZoneSameInstant(BANGKOK).toLocalDateTime();
+        LocalDateTime timeEnd   = req.bookingTimeEnd().atZoneSameInstant(BANGKOK).toLocalDateTime();
+        requireValidWindow(timeStart, timeEnd);
+
         Agent agent = agentRepository.findByAgentIdAndDeletedAtIsNull(agentId)
             .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
@@ -144,10 +150,9 @@ public class BookingService {
                 bookingId, req.itemId(), item.getItemId(), serial);
         }
 
-        // กัน double-booking กล่องเดียวกัน
-        if (bookingRepository.existsActiveByItemAndSerial(item.getId(), serial)) {
-            throw new IllegalArgumentException("Copy already booked: serial=" + serial);
-        }
+        // กัน double-booking กล่องเดียวกัน — เฉพาะใบที่เวลาทับกัน (หรือใบ OVERDUE ที่ของยังไม่กลับ)
+        // เดิมเช็คแค่ "มีใบค้างไหม" ไม่ดูเวลา ใบจองล่วงหน้าใบเดียวเลยล็อกกล่องทั้งหมดจนถึงวันนั้น
+        requireNoConflict(item.getId(), serial, timeStart, timeEnd);
 
         // กล่องที่ร้านลงทะเบียนไว้แต่ยังไม่ได้เอาเข้าตู้ — จองไม่ได้ และต้องบอกให้ชัด
         // ไม่ใช่ปล่อยให้ระเบิดเป็น NPE ตรง getVault() ให้คนเรียก API เดาเอง
@@ -174,10 +179,6 @@ public class BookingService {
                 ? req.pin()
                 : (item.getDefaultPin() != null ? item.getDefaultPin() : generatePin());
         String requestId = UUID.randomUUID().toString();
-
-        // แปลง OffsetDateTime → LocalDateTime (เก็บเป็น Bangkok time ใน DB)
-        LocalDateTime timeStart = req.bookingTimeStart().atZoneSameInstant(BANGKOK).toLocalDateTime();
-        LocalDateTime timeEnd   = req.bookingTimeEnd().atZoneSameInstant(BANGKOK).toLocalDateTime();
 
         // Publish MQTT command ไปยัง kiosk (fire-and-forget)
         // Device ตอบกลับผ่าน events/booking/created → Lambda → PATCH /api/v1/bookings/{id}/iot-event
@@ -230,11 +231,30 @@ public class BookingService {
             .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
 
         String status = booking.getBookingStatus();
-        if ("RETURNED".equals(status) || "CANCELLED".equals(status) || "FAILED".equals(status)) {
+        if ("RETURNED".equals(status) || "CANCELLED".equals(status)
+                || "FAILED".equals(status) || "EXPIRED".equals(status)) {
             throw new IllegalArgumentException("Cannot extend booking in status: " + status);
         }
 
         LocalDateTime newEnd = validUntil.atZoneSameInstant(BANGKOK).toLocalDateTime();
+        requireValidWindow(booking.getBookingTimeStart(), newEnd);
+
+        // กล่องหนึ่งมีหลายใบได้แล้ว — ขยายเวลาจนชนใบถัดไปไม่ได้ ไม่งั้นลูกค้าใบถัดไปมาแล้วไม่มีของ
+        // ไม่นับตัวเอง (เทียบด้วย DB id) · ใบที่ไม่มี item/serial (ข้อมูลเก่า) ข้ามการเช็ค
+        if (booking.getItem() != null && booking.getSerialNumber() != null) {
+            bookingRepository.findConflicting(booking.getItem().getId(), booking.getSerialNumber(),
+                    booking.getBookingTimeStart(), newEnd)
+                .stream()
+                .filter(other -> !other.getId().equals(booking.getId()))
+                .findFirst()
+                .ifPresent(other -> {
+                    throw new IllegalArgumentException(
+                        "Cannot extend into another booking: serial=" + booking.getSerialNumber()
+                            + " by " + other.getBookingId()
+                            + " (" + other.getBookingTimeStart() + " to " + other.getBookingTimeEnd() + ")");
+                });
+        }
+
         booking.setBookingTimeEnd(newEnd);
         Booking saved = bookingRepository.save(booking);
 
@@ -470,6 +490,42 @@ public class BookingService {
         log.info("[BOOKING] Expired booking={} serial={} was={} — copy released",
             b.getBookingId(), b.getSerialNumber(), status);
         return 1;
+    }
+
+    /**
+     * ช่วงเวลาที่ขอจองต้องใช้ได้จริง
+     *
+     * เวลาจบต้องหลังเวลาเริ่ม — ไม่งั้นการเช็คทับกันพังเงียบ (ช่วงติดลบไม่ทับกับอะไรเลย ผ่านทุกด่าน)
+     * เวลาจบต้องยังไม่ผ่านไป — ใบแบบนี้ scheduler จะปิดทิ้งทันทีในรอบถัดไป ลูกค้าได้ PIN ที่ใช้ไม่ได้
+     * เวลาเริ่มเป็นอดีตได้ — request ที่ตั้งเวลาเริ่มเป็น "ตอนนี้" มาถึงช้าไปไม่กี่วินาทีต้องไม่ถูกปัด
+     */
+    private void requireValidWindow(LocalDateTime start, LocalDateTime end) {
+        if (!end.isAfter(start)) {
+            throw new IllegalArgumentException(
+                "bookingTimeEnd must be after bookingTimeStart: start=" + start + " end=" + end);
+        }
+        if (!end.isAfter(LocalDateTime.now(BANGKOK))) {
+            throw new IllegalArgumentException("bookingTimeEnd is already in the past: end=" + end);
+        }
+    }
+
+    /**
+     * กล่องนี้ว่างในช่วงที่ขอหรือเปล่า — ถ้าไม่ว่าง บอกด้วยว่าใบไหนขวาง
+     *
+     * ข้อความยังขึ้นต้นด้วย "Copy already booked: serial=" เหมือนเดิม เผื่อฝั่งแอปจับข้อความนี้อยู่
+     * ต่อท้ายด้วยเลขใบที่ขวาง — ของเดิมไม่บอก ทีมแอปจึงไล่เองไม่ได้ว่าทำไมจองไม่ผ่าน
+     */
+    private void requireNoConflict(String itemDbId, String serial, LocalDateTime start, LocalDateTime end) {
+        List<Booking> conflicts = bookingRepository.findConflicting(itemDbId, serial, start, end);
+        if (conflicts.isEmpty()) return;
+
+        Booking blocking = conflicts.get(0);
+        String reason = "OVERDUE".equals(blocking.getBookingStatus())
+            ? "copy not returned yet"
+            : blocking.getBookingTimeStart() + " to " + blocking.getBookingTimeEnd();
+        throw new IllegalArgumentException(
+            "Copy already booked: serial=" + serial
+                + " by " + blocking.getBookingId() + " (" + reason + ")");
     }
 
     /**

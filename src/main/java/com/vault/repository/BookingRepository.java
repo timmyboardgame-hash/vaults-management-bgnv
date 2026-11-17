@@ -48,6 +48,27 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
     /**
+     * ใบที่ขวางการจองกล่องนี้ในช่วง [start, end) — ใช้ตอนสร้าง booking
+     *
+     * ต่างจาก existsActiveByItemAndSerial ที่ดูว่า "มีใบค้างอยู่ไหม ไม่สนเวลา" (ใช้กันย้าย/ลบกล่อง)
+     * ตัวนี้ให้กล่องเดียวกันมีหลายใบได้ถ้าเวลาไม่ทับกัน
+     *
+     * PENDING / CONFIRMED / ACTIVE — ขวางเฉพาะเมื่อช่วงเวลาทับกัน (ชนขอบพอดีไม่นับว่าทับ)
+     * OVERDUE — ขวางทุกช่วงเวลา: เวลาจบเป็นอดีตไปแล้วแต่ของยังไม่กลับเข้าตู้
+     *           ถ้าใช้กฎเวลาอย่างเดียว ใบนี้จะหลุดแล้วระบบออก PIN ให้กล่องที่ไม่อยู่ในตู้
+     */
+    @Query("SELECT b FROM Booking b WHERE b.item.id = :itemId AND b.serialNumber = :serialNumber " +
+           "AND b.deletedAt IS NULL AND (" +
+           "  b.bookingStatus = 'OVERDUE' " +
+           "  OR (b.bookingStatus IN ('PENDING','CONFIRMED','ACTIVE') " +
+           "      AND b.bookingTimeStart < :end AND :start < b.bookingTimeEnd)" +
+           ") ORDER BY b.bookingTimeStart")
+    List<Booking> findConflicting(@Param("itemId") String itemId,
+                                  @Param("serialNumber") String serialNumber,
+                                  @Param("start") java.time.LocalDateTime start,
+                                  @Param("end") java.time.LocalDateTime end);
+
+    /**
      * booking ที่ยังไม่จบของตู้หนึ่ง เฉพาะที่ item เป็นตัวที่ส่งมา — ใช้หา session ที่ยังเปิดอยู่
      *
      * OVERDUE ยังนับว่าไม่จบ (หมดเวลาแล้วแต่ของยังค้าง) จึงต้องไม่อยู่ในลิสต์ที่กรองทิ้ง
