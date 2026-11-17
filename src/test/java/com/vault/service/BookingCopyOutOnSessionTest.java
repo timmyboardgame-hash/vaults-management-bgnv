@@ -124,11 +124,12 @@ class BookingCopyOutOnSessionTest {
                 .thenReturn(List.of(sessions));
     }
 
+    /** พรุ่งนี้ 13:00–15:00 — ต้องเป็นอนาคตเสมอ ระบบไม่รับใบที่เวลาจบผ่านไปแล้ว */
     private CreateBookingRequest request(String itemId, String serial) {
+        OffsetDateTime tomorrow = OffsetDateTime.now(ZoneOffset.ofHours(7)).plusDays(1)
+                .withHour(13).withMinute(0).withSecond(0).withNano(0);
         return new CreateBookingRequest(
-                null, itemId,
-                OffsetDateTime.of(2026, 11, 12, 13, 0, 0, 0, ZoneOffset.ofHours(7)),
-                OffsetDateTime.of(2026, 11, 12, 15, 0, 0, 0, ZoneOffset.ofHours(7)),
+                null, itemId, tomorrow, tomorrow.plusHours(2),
                 "ทดสอบ", null, null, serial);
     }
 
@@ -258,7 +259,10 @@ class BookingCopyOutOnSessionTest {
     void stillBlocksAPlainDoubleBooking() {
         VaultItem booked = copy(SERIAL, EPC);
         happyPath(booked);
-        when(bookings.existsActiveByItemAndSerial(any(), any())).thenReturn(true);
+        Booking existing = new Booking();
+        existing.setBookingId("BK-EXISTING");
+        existing.setBookingStatus("CONFIRMED");
+        when(bookings.findConflicting(any(), any(), any(), any())).thenReturn(List.of(existing));
 
         assertThatThrownBy(() -> service.createBooking(AGENT, request("NOVA-EVENT-002", SERIAL)))
                 .hasMessageContaining("Copy already booked");
