@@ -82,7 +82,8 @@ public class BookingWebController {
                     bookingName,
                     bookingDate,
                     pin,
-                    serialNumber
+                    serialNumber,
+                    null  // qrToken — QR เป็นของแอป ใบที่ admin สร้างเปิดด้วย PIN อย่างเดียว
             );
 
             // vaultId หาใน service ผ่าน VaultItem + ตรวจ binding agent↔vault ด้วย

@@ -19,5 +19,8 @@ public record BookingResponse(
     String bookingDate,
     String pin,
     String serialNumber,
+    // ส่งกลับให้แอปเทียบได้ทันทีว่าเราได้ค่าเดียวกับที่เขาเอาไปทำ QR
+    // ถ้าแอปส่งมาแล้วตรงนี้เป็น null = ชื่อ field ผิด ค่าไม่ถึงตู้
+    String qrToken,
     OffsetDateTime createdAt
 ) {}

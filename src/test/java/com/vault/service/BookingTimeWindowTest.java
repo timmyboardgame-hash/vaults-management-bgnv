@@ -54,7 +54,7 @@ class BookingTimeWindowTest {
                                          String pin, String rfidTag,
                                          String gameId, String gameTitle, String serialNumber,
                                          LocalDateTime validFrom, LocalDateTime validUntil,
-                                         boolean sessionMode) {
+                                         boolean sessionMode, String qrToken) {
             created.add(bookingId);
         }
 
@@ -115,7 +115,7 @@ class BookingTimeWindowTest {
     }
 
     private static CreateBookingRequest request(OffsetDateTime start, OffsetDateTime end) {
-        return new CreateBookingRequest(null, "NOVA-EVENT-002", start, end, "ทดสอบ", null, null, SERIAL);
+        return new CreateBookingRequest(null, "NOVA-EVENT-002", start, end, "ทดสอบ", null, null, SERIAL, null);
     }
 
     private static Booking existing(String bookingId, String status, LocalDateTime start, LocalDateTime end) {

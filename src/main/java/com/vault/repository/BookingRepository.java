@@ -47,6 +47,11 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
            "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL")
     boolean existsActiveByItemAndSerial(@Param("itemId") String itemId, @Param("serialNumber") String serialNumber);
 
+    // ใบที่ยังไม่จบที่ใช้ QR token นี้ — กันสองใบเปิดด้วย QR เดียวกัน
+    @Query("SELECT b FROM Booking b WHERE b.qrToken = :qrToken " +
+           "AND b.bookingStatus NOT IN ('RETURNED','CANCELLED','FAILED','EXPIRED') AND b.deletedAt IS NULL")
+    List<Booking> findOpenByQrToken(@Param("qrToken") String qrToken);
+
     /**
      * ใบที่ขวางการจองกล่องนี้ในช่วง [start, end) — ใช้ตอนสร้าง booking
      *

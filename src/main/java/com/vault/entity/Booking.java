@@ -59,6 +59,11 @@ public class Booking {
     @Column(name = "serial_number")
     private String serialNumber;  // เลข barcode กล่องบอร์ดเกม — required ที่ app layer (SQLite ไม่ enforce)
 
+    // ค่าใน QR ที่แอปแสดงให้ลูกค้าสแกนเปิดตู้ — แอปเป็นคนออก เราเก็บไว้และส่งต่อให้ตู้ใน booking/create
+    // nullable: ใบเก่าและใบที่สร้างจากหน้า admin ไม่มี · ddl-auto: update เพิ่มคอลัมน์ให้เอง
+    @Column(name = "qr_token")
+    private String qrToken;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -77,6 +82,9 @@ public class Booking {
 
     public String getBookingId() { return bookingId; }
     public void setBookingId(String bookingId) { this.bookingId = bookingId; }
+
+    public String getQrToken() { return qrToken; }
+    public void setQrToken(String qrToken) { this.qrToken = qrToken; }
 
     public Agent getAgent() { return agent; }
     public void setAgent(Agent agent) { this.agent = agent; }

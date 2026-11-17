@@ -91,11 +91,28 @@ public class AwsIotService {
                                      String pin, String rfidTag,
                                      String gameId, String gameTitle, String serialNumber,
                                      LocalDateTime validFrom, LocalDateTime validUntil,
-                                     boolean sessionMode) {
+                                     boolean sessionMode, String qrToken) {
         if (!isConfigured()) {
             log.warn("[IoT] Not configured — skipping publishBookingCreate booking={}", bookingId);
             return;
         }
+        publishMqtt("vault/" + thingName + "/cmd/booking/create", requestId,
+            bookingCreatePayload(bookingId, pin, rfidTag, gameId, gameTitle, serialNumber,
+                validFrom, validUntil, sessionMode, qrToken));
+        log.info("[IoT] Published booking/create booking={} thing={} type={} qr={}",
+            bookingId, thingName, sessionMode ? "event" : "game", qrToken != null ? "yes" : "no");
+    }
+
+    /**
+     * payload ของ cmd/booking/create — แยกออกมาให้ทดสอบได้โดยไม่ต้องต่อ AWS จริง
+     *
+     * qr_token อยู่ระดับเดียวกับ booking_id / pin ใส่เฉพาะเมื่อแอปส่งมา
+     * ไม่มีก็ไม่ใส่ key เลย (ไม่ส่ง null) — payload ของใบเดิมจึงเหมือนเดิมทุก byte
+     */
+    static Map<String, Object> bookingCreatePayload(String bookingId, String pin, String rfidTag,
+                                                    String gameId, String gameTitle, String serialNumber,
+                                                    LocalDateTime validFrom, LocalDateTime validUntil,
+                                                    boolean sessionMode, String qrToken) {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         if (sessionMode) {
@@ -105,12 +122,14 @@ public class AwsIotService {
             payload.put("booking_id",   bookingId);
             payload.put("booking_type", "event");
             payload.put("pin",          pin);
+            if (qrToken != null) payload.put("qr_token", qrToken);
             payload.put("valid_from",   validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
             payload.put("valid_until",  validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         } else {
             // Game booking — payload เดิมทุกประการ (ไม่ใส่ booking_type = พฤติกรรมเดิมตาม contract)
             payload.put("booking_id", bookingId);
             payload.put("pin",        pin);
+            if (qrToken != null) payload.put("qr_token", qrToken);
             payload.put("tags",       List.of(rfidTag != null ? rfidTag : ""));
             payload.put("valid_from",  validFrom.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
             payload.put("valid_until", validUntil.atOffset(BANGKOK).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
@@ -119,10 +138,7 @@ public class AwsIotService {
             payload.put("serial_number", serialNumber);  // ระบุกล่องจริง — item เดียวกันมีหลาย copy
             payload.put("locker_id",  1);
         }
-
-        publishMqtt("vault/" + thingName + "/cmd/booking/create", requestId, payload);
-        log.info("[IoT] Published booking/create booking={} thing={} type={}",
-            bookingId, thingName, sessionMode ? "event" : "game");
+        return payload;
     }
 
     /**

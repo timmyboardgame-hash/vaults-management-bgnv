@@ -134,6 +134,9 @@ public class BookingService {
         LocalDateTime timeEnd   = req.bookingTimeEnd().atZoneSameInstant(BANGKOK).toLocalDateTime();
         requireValidWindow(timeStart, timeEnd);
 
+        String qrToken = req.qrToken() != null && !req.qrToken().isBlank() ? req.qrToken().trim() : null;
+        requireQrTokenNotInUse(qrToken);
+
         Agent agent = agentRepository.findByAgentIdAndDeletedAtIsNull(agentId)
             .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
@@ -194,7 +197,8 @@ public class BookingService {
             serial,
             timeStart,
             timeEnd,
-            session  // session → tags:[] + booking_mode=session
+            session,  // session → tags:[] + booking_mode=session
+            qrToken
         );
 
         Booking booking = new Booking();
@@ -214,6 +218,7 @@ public class BookingService {
                 : timeStart.toLocalDate().toString());
         booking.setPin(pin);
         booking.setSerialNumber(serial);
+        booking.setQrToken(qrToken);
 
         Booking saved = bookingRepository.saveAndFlush(booking);
         log.info("[BOOKING] Created booking={} vault={} slot={} status=PENDING", saved.getBookingId(), vaultId, saved.getSlotId());
@@ -510,6 +515,20 @@ public class BookingService {
     }
 
     /**
+     * QR เดียวกันต้องเปิดได้ใบเดียว
+     *
+     * ถ้าสองใบที่ยังไม่จบมี token เดียวกัน ตู้ไม่มีทางรู้ว่าลูกค้าที่สแกนมาเป็นของใบไหน
+     * อาจเปิดช่องผิดใบ และเราไล่ย้อนหลังไม่ได้ว่าใครเปิด · ใบที่จบแล้วไม่นับ — ตู้ถอนสิทธิ์ไปแล้ว
+     */
+    private void requireQrTokenNotInUse(String qrToken) {
+        if (qrToken == null) return;
+        bookingRepository.findOpenByQrToken(qrToken).stream().findFirst().ifPresent(other -> {
+            throw new IllegalArgumentException(
+                "QR token already in use by booking " + other.getBookingId());
+        });
+    }
+
+    /**
      * กล่องนี้ว่างในช่วงที่ขอหรือเปล่า — ถ้าไม่ว่าง บอกด้วยว่าใบไหนขวาง
      *
      * ข้อความยังขึ้นต้นด้วย "Copy already booked: serial=" เหมือนเดิม เผื่อฝั่งแอปจับข้อความนี้อยู่
@@ -615,6 +634,7 @@ public class BookingService {
             b.getBookingDate(),
             b.getPin(),
             b.getSerialNumber(),
+            b.getQrToken(),
             toOffset(b.getCreatedAt())
         );
     }
