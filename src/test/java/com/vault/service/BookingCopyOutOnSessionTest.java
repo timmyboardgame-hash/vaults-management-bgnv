@@ -54,7 +54,7 @@ class BookingCopyOutOnSessionTest {
                                          String pin, String rfidTag,
                                          String gameId, String gameTitle, String serialNumber,
                                          LocalDateTime validFrom, LocalDateTime validUntil,
-                                         boolean sessionMode) {
+                                         boolean sessionMode, String qrToken) {
             created.add(bookingId);
         }
     }
@@ -130,7 +130,7 @@ class BookingCopyOutOnSessionTest {
                 .withHour(13).withMinute(0).withSecond(0).withNano(0);
         return new CreateBookingRequest(
                 null, itemId, tomorrow, tomorrow.plusHours(2),
-                "ทดสอบ", null, null, serial);
+                "ทดสอบ", null, null, serial, null);
     }
 
     /** stub เส้นทางปกติของ createBooking ให้ผ่านจนถึงจุดที่เราสนใจ */
