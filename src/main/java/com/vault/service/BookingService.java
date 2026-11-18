@@ -618,7 +618,6 @@ public class BookingService {
 
     private BookingResponse toResponse(Booking b) {
         return new BookingResponse(
-            b.getId(),
             b.getBookingId(),
             b.getAgent().getAgentId(),
             b.getAgent().getAgentName(),
