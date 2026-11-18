@@ -44,6 +44,8 @@ class BookingExpiryTest {
     private static final class IotSpy extends AwsIotService {
         final List<String> cancelled = new ArrayList<>();
         final List<String> cancelledThings = new ArrayList<>();
+        final List<String> ended = new ArrayList<>();
+        final List<String> endedThings = new ArrayList<>();
 
         IotSpy() { super(Optional.empty(), Optional.empty(), new ObjectMapper()); }
 
@@ -51,6 +53,12 @@ class BookingExpiryTest {
         public void publishBookingCancel(String thingName, String bookingId, String requestId) {
             cancelledThings.add(thingName);
             cancelled.add(bookingId);
+        }
+
+        @Override
+        public void publishBookingEnd(String thingName, String bookingId, String requestId) {
+            endedThings.add(thingName);
+            ended.add(bookingId);
         }
     }
 
@@ -221,8 +229,131 @@ class BookingExpiryTest {
 
         assertThat(closed).isEqualTo(1);
         assertThat(s.getBookingStatus()).isEqualTo("RETURNED");
-        // session ไม่ใช้ booking_cancel — ของคืนครบแล้ว ไม่มีสิทธิ์ค้างให้ถอน
+        // session ใช้ booking/end ตามสัญญาตู้ ไม่ใช่ booking/cancel
         assertThat(iot.cancelled).isEmpty();
+        assertThat(iot.ended).containsExactly("BK-SESSION-1");
+        assertThat(iot.endedThings).containsExactly(THING);
+    }
+
+    /** รอบที่ไม่มีใครหยิบอะไรเลยก็ต้องสั่งตู้จบรอบ ไม่งั้น PIN/QR ยังเปิดตู้ได้หลังหมดเวลา */
+    @Test
+    void endsAnUntouchedSessionOnTheLockerToo() {
+        Booking s = expired("BK-SESSION-UNUSED", "SESSION-PASS", "CONFIRMED", "SESSION-VT002");
+        timelineOf(s);
+        schedulerSees(s);
+
+        service.closeExpiredBookings();
+
+        assertThat(iot.ended).containsExactly("BK-SESSION-UNUSED");
+    }
+
+    /** ของค้างก็ต้องสั่งจบรอบ — ตู้ตั้ง closing flag: ห้ามหยิบเพิ่ม แต่ยังรับคืนได้ */
+    @Test
+    void endsASessionWithOutstandingCopiesOnTheLockerAndMarksItOverdue() {
+        Booking s = expired("BK-SESSION-OUT", "SESSION-PASS", "ACTIVE", "SESSION-VT002");
+        timelineOf(s, "MOVE:PICKED_UP", EPC);
+        schedulerSees(s);
+
+        service.closeExpiredBookings();
+
+        assertThat(iot.ended).containsExactly("BK-SESSION-OUT");
+        assertThat(s.getBookingStatus()).isEqualTo("OVERDUE");
+    }
+
+    /** scheduler วนทุกนาที — สั่งจบรอบครั้งเดียวตอนเลยเวลา ไม่ยิงซ้ำทุกนาทีจนกว่าของจะคืน */
+    @Test
+    void doesNotResendEndForASessionAlreadyOverdue() {
+        Booking s = expired("BK-SESSION-OVERDUE", "SESSION-PASS", "OVERDUE", "SESSION-VT002");
+        timelineOf(s, "MOVE:PICKED_UP", EPC);
+        schedulerSees(s);
+
+        service.closeExpiredBookings();
+
+        assertThat(iot.ended).isEmpty();
+    }
+
+    /** OVERDUE ที่ของกลับครบแล้ว (event คืนชิ้นสุดท้ายหลุด) — ปิดได้ แต่ไม่ต้องสั่งตู้ซ้ำ */
+    @Test
+    void closesAnOverdueSessionOnceEverythingIsBackWithoutResendingEnd() {
+        Booking s = expired("BK-SESSION-LATE", "SESSION-PASS", "OVERDUE", "SESSION-VT002");
+        timelineOf(s, "MOVE:PICKED_UP", EPC, "MOVE:RETURNED", EPC);
+        schedulerSees(s);
+
+        int closed = service.closeExpiredBookings();
+
+        assertThat(closed).isEqualTo(1);
+        assertThat(s.getBookingStatus()).isEqualTo("RETURNED");
+        assertThat(iot.ended).isEmpty();
+    }
+
+    /** session เก่าที่ไม่มี vault ผูก ต้องปิดได้ ไม่ใช่ NPE แล้วทั้งรอบล้ม */
+    @Test
+    void closesASessionWithNoVaultWithoutSendingAnything() {
+        Booking s = expired("BK-SESSION-NOVAULT", "SESSION-PASS", "CONFIRMED", "SESSION-VT002");
+        s.setVault(null);
+        timelineOf(s);
+        schedulerSees(s);
+
+        assertThat(service.closeExpiredBookings()).isEqualTo(1);
+        assertThat(iot.ended).isEmpty();
+    }
+
+    // ──────────────────────── ตู้ตอบรับคำสั่งกลับมา ────────────────────────
+
+    private void bookingIs(Booking b) {
+        when(bookings.findByBookingIdAndDeletedAtIsNull(b.getBookingId())).thenReturn(Optional.of(b));
+    }
+
+    private static com.vault.dto.IotEventRequest event(String name) {
+        return new com.vault.dto.IotEventRequest(name, "success", null, null, null, null);
+    }
+
+    /**
+     * scheduler ปิดใบเป็น EXPIRED แล้วสั่ง booking/cancel ตู้ตอบกลับเป็น booking_cancelled
+     * ต้องคงเป็น EXPIRED — ไม่งั้นทุกใบที่ไม่มีคนมารับจะกลายเป็น CANCELLED เหมือนถูกยกเลิกด้วยมือ
+     */
+    @Test
+    void theLockersCancelAckDoesNotTurnExpiredIntoCancelled() {
+        Booking b = expired("BK-NOSHOW-ACK", "Cascadia", "EXPIRED", "8530021");
+        bookingIs(b);
+
+        service.handleIotEvent("BK-NOSHOW-ACK", event("booking_cancelled"));
+
+        assertThat(b.getBookingStatus()).isEqualTo("EXPIRED");
+        assertThat(recordedEvents()).extracting(BookingStatusEvent::getStatus)
+                .containsExactly("LATE_EVENT:booking_cancelled");
+    }
+
+    /**
+     * สั่ง booking/end ให้รอบที่ของยังค้าง ตู้ตอบรับเป็น booking_cancelled แต่ยังรอคืนของอยู่
+     * ใบต้องค้างเป็น OVERDUE — ถ้ากลายเป็น CANCELLED กล่องที่ยังอยู่ข้างนอกจะหลุดด่านกันจอง
+     */
+    @Test
+    void theLockersEndAckKeepsAnOverdueSessionOpen() {
+        Booking s = expired("BK-SESSION-ACK", "SESSION-PASS", "OVERDUE", "SESSION-VT002");
+        bookingIs(s);
+
+        service.handleIotEvent("BK-SESSION-ACK", event("booking_cancelled"));
+
+        assertThat(s.getBookingStatus()).isEqualTo("OVERDUE");
+        verify(bookings, never()).save(any(Booking.class));
+        assertThat(recordedEvents()).extracting(BookingStatusEvent::getStatus).containsExactly("END_ACK");
+    }
+
+    /** หลังตู้ตอบรับแล้ว การคืนชิ้นสุดท้ายยังต้องปิดรอบได้ตามปกติ */
+    @Test
+    void anOverdueSessionStillClosesOnTheLastReturnAfterTheAck() {
+        Booking s = expired("BK-SESSION-ACK2", "SESSION-PASS", "OVERDUE", "SESSION-VT002");
+        bookingIs(s);
+        when(bookings.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.handleIotEvent("BK-SESSION-ACK2", event("booking_cancelled"));
+
+        timelineOf(s, "MOVE:PICKED_UP", EPC, "MOVE:RETURNED", EPC);
+        when(copies.findActiveByRfidTag(EPC)).thenReturn(Optional.empty());
+        service.handleIotEvent("BK-SESSION-ACK2",
+                new com.vault.dto.IotEventRequest("booking_returned", "success", null, null, null, EPC));
+
+        assertThat(s.getBookingStatus()).isEqualTo("RETURNED");
     }
 
     /** ของยังไม่ครบ = OVERDUE ไม่ใช่ EXPIRED — ต้องยังรับ event คืนของได้ */
