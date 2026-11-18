@@ -336,9 +336,12 @@ public class BookingService {
             return;
         }
 
-        // booking ที่จบแล้ว (RETURNED/CANCELLED/FAILED) ห้ามถูก event ที่มาช้าเปลี่ยน status ย้อน
+        // booking ที่จบแล้วห้ามถูก event ที่มาช้าเปลี่ยน status ย้อน
+        // EXPIRED ต้องอยู่ในนี้ด้วย — ใบที่ scheduler ปิดเป็น EXPIRED เพิ่งสั่ง booking/cancel ไป
+        // ตู้ตอบกลับเป็น booking_cancelled ถ้าไม่กันไว้ ใบจะถูกเขียนทับเป็น CANCELLED แยกไม่ออกว่าไม่มีคนมารับ
         String current = booking.getBookingStatus();
-        if ("RETURNED".equals(current) || "CANCELLED".equals(current) || "FAILED".equals(current)) {
+        if ("RETURNED".equals(current) || "CANCELLED".equals(current)
+                || "FAILED".equals(current) || "EXPIRED".equals(current)) {
             log.warn("[IoT-EVENT] booking={} already terminal ({}) — ignoring late event {}",
                 bookingId, current, req.event());
             // เก็บ epc ด้วย — เช่นคืนของหลัง admin end จะได้รู้ว่ากล่องไหนกลับมา
@@ -372,6 +375,17 @@ public class BookingService {
                     log.info("[SESSION] Overdue booking={} closed — all items returned", bookingId);
                 }
             }
+            return;
+        }
+
+        // session ที่หมดเวลาแล้วของยังค้าง — scheduler สั่ง booking/end ไปแล้ว ตู้ตอบรับเป็น booking_cancelled
+        // แต่ตู้ยังรับคืนของต่อ (closing flag) ใบต้องค้างเป็น OVERDUE จนกว่าของจะกลับครบ
+        // ถ้าปล่อยให้เป็น CANCELLED กล่องที่ยังอยู่ข้างนอกจะหลุดด่านกันจอง แล้วระบบออก PIN ให้กล่องที่ไม่อยู่ในตู้
+        if (isSessionBooking(booking) && "booking_cancelled".equals(req.event())
+                && "OVERDUE".equals(current)) {
+            recordStatusEvent(booking, "END_ACK", "ตู้รับคำสั่งจบรอบแล้ว — ยังรอคืนของ");
+            log.info("[IoT-EVENT] SESSION booking={} end acknowledged — staying OVERDUE until all items are back",
+                bookingId);
             return;
         }
 
@@ -433,29 +447,50 @@ public class BookingService {
     /**
      * session ที่หมดเวลา
      *
-     * ของครบ (ทุกกล่องที่หยิบถูกคืนแล้ว) → ปิดเป็น RETURNED
-     * ของไม่ครบ → OVERDUE (ยังไม่จบ — event คืนของยังบันทึกเป็น MOVE ได้
-     *             และยังบล็อค session ใหม่บนตู้เดิม) เมื่อคืนครบจึงปิดเป็น RETURNED
-     *             (ปิดทันทีตอนรับ event คืนชิ้นสุดท้าย หรือรอบ scheduler ถัดไป)
+     * รอบแรกที่เห็นว่าเลยเวลา: สั่ง booking/end ให้ตู้ก่อน แล้วค่อยเปลี่ยนสถานะ
+     *   เดิมแก้แค่ DB ไม่บอกตู้ — ถ้าตู้ไม่ปิดรอบเองตาม valid_until PIN/QR ของรอบที่จบแล้วยังเปิดได้
+     *   ตู้ตัดสินเองตามสัญญา: มือเปล่า → archive ทันที · ของค้าง → closing flag (ห้ามหยิบเพิ่ม ยังรับคืน)
+     *   ของครบ → RETURNED · ของไม่ครบ → OVERDUE (ตรงกับ closing flag ของตู้พอดี)
+     *
+     * รอบถัดไปที่เป็น OVERDUE อยู่แล้ว: ไม่สั่งตู้ซ้ำ (scheduler วนทุกนาที) แค่เช็คว่าของครบหรือยัง
+     *   เผื่อ event คืนชิ้นสุดท้ายประมวลผลพลาด — ปกติจะปิดทันทีตอนรับ event คืนชิ้นสุดท้ายอยู่แล้ว
      */
     private int closeExpiredSession(Booking b) {
         java.util.Set<String> outstanding = outstandingEpcsOf(b);
+        boolean firstPass = !"OVERDUE".equals(b.getBookingStatus());
+
+        if (firstPass) {
+            endSessionOnLocker(b);
+        }
 
         if (outstanding.isEmpty()) {
             b.setBookingStatus("RETURNED");
             Booking saved = bookingRepository.save(b);
-            recordStatusEvent(saved, "RETURNED", "Session expired — all items returned");
+            recordStatusEvent(saved, "RETURNED", firstPass
+                ? "Session expired — all items returned (booking/end sent)"
+                : "Session overdue — all items returned");
             log.info("[SESSION] Closed expired session booking={}", b.getBookingId());
             return 1;
         }
-        if (!"OVERDUE".equals(b.getBookingStatus())) {
+        if (firstPass) {
             b.setBookingStatus("OVERDUE");
             Booking saved = bookingRepository.save(b);
             recordStatusEvent(saved, "OVERDUE",
-                "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding));
+                "หมดเวลาแล้วยังไม่คืน " + outstanding.size() + " กล่อง: " + String.join(", ", outstanding)
+                    + " — สั่งตู้จบรอบแล้ว ยังรับคืนได้");
             log.warn("[SESSION] Overdue booking={} outstanding={}", b.getBookingId(), outstanding);
         }
         return 0;
+    }
+
+    /** สั่ง booking/end — คำสั่งเดียวกับที่ admin ใช้จบรอบก่อนเวลา (cancelBooking) */
+    private void endSessionOnLocker(Booking b) {
+        if (b.getVault() == null) {
+            log.warn("[SESSION] No vault on booking={} — skipping MQTT end", b.getBookingId());
+            return;
+        }
+        awsIotService.publishBookingEnd(
+            b.getVault().effectiveThingName(), b.getBookingId(), UUID.randomUUID().toString());
     }
 
     /**
